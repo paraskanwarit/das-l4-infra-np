@@ -1,3 +1,8 @@
+provider "google" {
+  project = var.project_id
+  region  = "australia-southeast1"
+}
+
 module "cloudsql" {
   source           = "../../../terraform-modules/cloudsql"
   instance_name    = "dev-sql-instance"

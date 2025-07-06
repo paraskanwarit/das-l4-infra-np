@@ -1,3 +1,8 @@
+provider "google" {
+  project = var.project_id
+  region  = "australia-southeast1"
+}
+
 module "cloudsql" {
   source           = "../../../terraform-modules/cloudsql"
   instance_name    = "staging-sql-instance"
@@ -19,7 +24,3 @@ module "cloudsql" {
     owner       = "team"
   }
 }
-
-# NOTE: Applications should use Workload Identity Federation to connect to this CloudSQL instance.
-# See: https://cloud.google.com/sql/docs/postgres/connect-workload-identity for setup and IAM guidance.
-# Do NOT store DB credentials in app code. Use IAM roles and GCP service accounts for secure access.

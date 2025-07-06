@@ -1,0 +1,37 @@
+# Terraform state and crash logs
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Terraform plan files
+*.tfplan
+
+# Sensitive variable files
+*.tfvars
+*.tfvars.json
+
+# Local .terraform directories
+.terraform/
+.terraform
+
+# Editor/OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Python cache
+__pycache__/
+
+# Mac system files
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+
+# Ignore backup files
+*.bak
+*.tmp

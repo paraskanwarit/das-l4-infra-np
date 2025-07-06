@@ -14,3 +14,8 @@ variable "sql_app_password" {
   type        = string
   sensitive   = true
 }
+variable "project_id" {
+  description = "GCP Project ID"
+  type        = string
+}
+

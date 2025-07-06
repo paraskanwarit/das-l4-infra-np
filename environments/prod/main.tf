@@ -1,3 +1,8 @@
+provider "google" {
+  project = var.project_id
+  region  = "australia-southeast1"
+}
+
 module "cloudsql" {
   source           = "../../../terraform-modules/cloudsql"
   instance_name    = "prod-sql-instance"
@@ -5,7 +10,7 @@ module "cloudsql" {
   region           = "australia-southeast1"
   tier             = "db-custom-2-7680"
   availability_type = "REGIONAL"
-  disk_size        = 100
+  disk_size        = 50
   disk_type        = "PD_SSD"
   ipv4_enabled     = false
   private_network  = var.private_network
