@@ -4,9 +4,9 @@ provider "google" {
 }
 
 module "cloudsql" {
-  source           = "../../../terraform-modules/cloudsql"
-  instance_name    = "prod-sql-instance"
-  database_version = "POSTGRES_14"
+  source           = "/Users/paraskanwar/Documents/paras-work/terraform-modules/cloudsql"
+  instance_name    = "dev-sql-instance"
+  database_version = "POSTGRES_16"
   region           = "australia-southeast1"
   tier             = "db-custom-2-7680"
   availability_type = "REGIONAL"
@@ -16,11 +16,11 @@ module "cloudsql" {
   private_network  = var.private_network
   authorized_networks = []
   root_password    = var.sql_root_password
-  db_user          = "produser"
+  db_user          = "devuser"
   db_password      = var.sql_app_password
-  db_name          = "proddb"
+  db_name          = "devdb"
   labels = {
-    environment = "prod"
+    environment = "dev"
     owner       = "team"
   }
 }
