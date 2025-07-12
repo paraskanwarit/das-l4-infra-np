@@ -29,15 +29,16 @@ jobs:
         with:
           terraform_version: 1.8.2  # Or whatever version you're using
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
+      - name: Change directory to environment
         run: cd environments/non-prod/dev
+        shell: bash
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: terraform init
-      - name: Run plan
-        run: terraform plan
-      - name: Run apply
-        run: terraform apply
-      
+      # Run Terraform commands
+      - name: Terraform Init
+        run: terraform -chdir=environments/non-prod/dev init
+
+      - name: Terraform Plan
+        run: terraform -chdir=environments/non-prod/dev plan
+
+      - name: Terraform Apply (Auto-approve)
+        run: terraform -chdir=environments/non-prod/dev apply -auto-approve
