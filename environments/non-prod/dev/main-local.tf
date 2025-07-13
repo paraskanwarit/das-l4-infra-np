@@ -43,11 +43,13 @@ resource "google_sql_user" "default" {
   name     = "devuser"
   instance = google_sql_database_instance.primary.name
   password = var.sql_app_password
+  project  = var.project_id
 }
 
 resource "google_sql_database" "default" {
   name      = "devdb"
   instance  = google_sql_database_instance.primary.name
   charset   = "utf8"
-  collation = "utf8_general_ci"
+  collation = "en_US.UTF8"
+  project   = var.project_id
 } 
