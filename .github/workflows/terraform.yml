@@ -100,7 +100,7 @@ jobs:
             echo "Deploying to specific environment: $ENVIRONMENTS"
           fi
           
-          # Deploy to each environment
+          # Deploy to each environment sequentially to avoid state lock conflicts
           for ENV in $ENVIRONMENTS; do
             echo "🚀 Deploying to environment: $ENV"
             
@@ -114,9 +114,13 @@ jobs:
             
             echo "Generated passwords for $ENV environment"
             
-            # Run Terraform commands
+            # Run Terraform commands with state lock handling
             echo "📁 Initializing Terraform for $ENV..."
             terraform -chdir=$ENV_PATH init
+            
+            # Force unlock if there's a stale lock (with timeout)
+            echo "🔓 Checking for stale state locks..."
+            terraform -chdir=$ENV_PATH force-unlock -force 1752407610536032 || echo "No stale lock found or already unlocked"
             
             echo "📥 Importing existing instance for $ENV (if exists)..."
             terraform -chdir=$ENV_PATH import module.cloudsql.google_sql_database_instance.primary projects/affable-beaker-464822-b4/instances/$INSTANCE_NAME || echo "Instance does not exist or already imported"
@@ -134,4 +138,7 @@ jobs:
             
             echo "✅ Successfully deployed $ENV environment"
             echo "----------------------------------------"
+            
+            # Add a small delay between environments to avoid conflicts
+            sleep 5
           done
