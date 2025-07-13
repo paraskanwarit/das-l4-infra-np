@@ -24,3 +24,9 @@ module "cloudsql" {
     owner       = "team"
   }
 }
+
+# Custom database creation for PostgreSQL (no charset/collation)
+resource "google_sql_database" "custom_db" {
+  name     = "devdb"
+  instance = "dev-sql-instance"
+}
