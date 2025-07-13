@@ -12,6 +12,7 @@ on:
         type: choice
         options:
           - dev
+          - qa1
           - staging
           - production
       confirm_destroy:
@@ -71,6 +72,8 @@ jobs:
             echo "path=environments/production/prod" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.inputs.environment }}" = "staging" ]; then
             echo "path=environments/staging/staging" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.environment }}" = "qa1" ]; then
+            echo "path=environments/non-prod/qa1" >> $GITHUB_OUTPUT
           else
             echo "path=environments/non-prod/dev" >> $GITHUB_OUTPUT
           fi
