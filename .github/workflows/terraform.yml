@@ -20,14 +20,11 @@ on:
         type: choice
         options:
           - apply
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - qa1
+      target_environment:
+        description: 'Specific environment to deploy (leave empty for all)'
+        required: false
+        type: string
+        default: ''
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -60,59 +57,52 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # Set environment path based on input
-      - name: Set Environment Path
-        id: env_path
+      # Detect and deploy to environments
+      - name: Deploy to Environments
         run: |
-          if [ "${{ github.event.inputs.environment }}" = "qa1" ]; then
-            echo "path=environments/non-prod/qa1" >> $GITHUB_OUTPUT
-            echo "instance_name=qa1-sql-instance" >> $GITHUB_OUTPUT
-          else
-            echo "path=environments/non-prod/dev" >> $GITHUB_OUTPUT
-            echo "instance_name=dev-sql-instance" >> $GITHUB_OUTPUT
+          # Find all directories in non-prod that contain main.tf
+          ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort)
+          
+          echo "Available environments: $ENVIRONMENTS"
+          
+          # If specific environment is requested, only deploy to that one
+          if [ -n "${{ github.event.inputs.target_environment }}" ]; then
+            ENVIRONMENTS="${{ github.event.inputs.target_environment }}"
+            echo "Deploying to specific environment: $ENVIRONMENTS"
           fi
-
-      # Generate strong passwords
-      - name: Generate Strong Passwords
-        id: passwords
-        run: |
-          # Generate root password (32 chars with special chars)
-          ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
-          echo "root_password=${ROOT_PASSWORD}" >> $GITHUB_OUTPUT
           
-          # Generate app password (32 chars with special chars)
-          APP_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
-          echo "app_password=${APP_PASSWORD}" >> $GITHUB_OUTPUT
-          
-          echo "Generated strong passwords for CloudSQL instance"
-
-      # Run Terraform commands
-      - name: Terraform Init
-        run: terraform -chdir=${{ steps.env_path.outputs.path }} init
-
-      - name: Import existing CloudSQL instance (if exists)
-        run: |
-          terraform -chdir=${{ steps.env_path.outputs.path }} import google_sql_database_instance.primary projects/affable-beaker-464822-b4/instances/${{ steps.env_path.outputs.instance_name }} || echo "Instance does not exist or already imported"
-        continue-on-error: true
-        env:
-          TF_VAR_sql_root_password: ${{ steps.passwords.outputs.root_password }}
-          TF_VAR_sql_app_password: ${{ steps.passwords.outputs.app_password }}
-
-      - name: Terraform Plan
-        run: terraform -chdir=${{ steps.env_path.outputs.path }} plan
-        env:
-          TF_VAR_sql_root_password: ${{ steps.passwords.outputs.root_password }}
-          TF_VAR_sql_app_password: ${{ steps.passwords.outputs.app_password }}
-
-      - name: Terraform Apply (Auto-approve)
-        run: terraform -chdir=${{ steps.env_path.outputs.path }} apply -auto-approve
-        env:
-          TF_VAR_sql_root_password: ${{ steps.passwords.outputs.root_password }}
-          TF_VAR_sql_app_password: ${{ steps.passwords.outputs.app_password }}
-
-      # Store passwords securely
-      - name: Store Passwords in GCP Secret Manager
-        run: |
-          echo "${{ steps.passwords.outputs.root_password }}" | gcloud secrets create cloudsql-root-password-${{ github.event.inputs.environment }} --data-file=- --replication-policy="automatic" || echo "Secret already exists"
-          echo "${{ steps.passwords.outputs.app_password }}" | gcloud secrets create cloudsql-app-password-${{ github.event.inputs.environment }} --data-file=- --replication-policy="automatic" || echo "Secret already exists"
-        continue-on-error: true
+          # Deploy to each environment
+          for ENV in $ENVIRONMENTS; do
+            echo "🚀 Deploying to environment: $ENV"
+            
+            # Set environment path
+            ENV_PATH="environments/non-prod/$ENV"
+            INSTANCE_NAME="${ENV}-sql-instance"
+            
+            # Generate passwords for this environment
+            ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
+            APP_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
+            
+            echo "Generated passwords for $ENV environment"
+            
+            # Run Terraform commands
+            echo "📁 Initializing Terraform for $ENV..."
+            terraform -chdir=$ENV_PATH init
+            
+            echo "📥 Importing existing instance for $ENV (if exists)..."
+            terraform -chdir=$ENV_PATH import module.cloudsql.google_sql_database_instance.primary projects/affable-beaker-464822-b4/instances/$INSTANCE_NAME || echo "Instance does not exist or already imported"
+            
+            echo "📋 Planning Terraform for $ENV..."
+            terraform -chdir=$ENV_PATH plan -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
+            
+            echo "✅ Applying Terraform for $ENV..."
+            terraform -chdir=$ENV_PATH apply -auto-approve -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
+            
+            # Store passwords securely
+            echo "🔐 Storing passwords for $ENV..."
+            echo "$ROOT_PASSWORD" | gcloud secrets create cloudsql-root-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
+            echo "$APP_PASSWORD" | gcloud secrets create cloudsql-app-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
+            
+            echo "✅ Successfully deployed $ENV environment"
+            echo "----------------------------------------"
+          done

@@ -64,18 +64,38 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # Detect available environments dynamically
+      - name: Detect Available Environments
+        id: detect_envs
+        run: |
+          # Find all directories in non-prod that contain main.tf
+          NON_PROD_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort)
+          echo "non_prod_envs=$(echo $NON_PROD_ENVS | tr '\n' ' ' | sed 's/ $//')" >> $GITHUB_OUTPUT
+          echo "Available non-prod environments: $NON_PROD_ENVS"
+
       # Set environment path based on input
       - name: Set Environment Path
         id: env_path
         run: |
-          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
-            echo "path=environments/production/prod" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.inputs.environment }}" = "staging" ]; then
-            echo "path=environments/staging/staging" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.inputs.environment }}" = "qa1" ]; then
-            echo "path=environments/non-prod/qa1" >> $GITHUB_OUTPUT
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          
+          # Check if it's a non-prod environment
+          if [ -d "environments/non-prod/$ENVIRONMENT" ] && [ -f "environments/non-prod/$ENVIRONMENT/main.tf" ]; then
+            echo "path=environments/non-prod/$ENVIRONMENT" >> $GITHUB_OUTPUT
+            echo "✅ Non-prod environment $ENVIRONMENT is valid"
+          # Check if it's a production environment
+          elif [ -d "environments/production/$ENVIRONMENT" ] && [ -f "environments/production/$ENVIRONMENT/main.tf" ]; then
+            echo "path=environments/production/$ENVIRONMENT" >> $GITHUB_OUTPUT
+            echo "✅ Production environment $ENVIRONMENT is valid"
+          # Check if it's a staging environment
+          elif [ -d "environments/staging/$ENVIRONMENT" ] && [ -f "environments/staging/$ENVIRONMENT/main.tf" ]; then
+            echo "path=environments/staging/$ENVIRONMENT" >> $GITHUB_OUTPUT
+            echo "✅ Staging environment $ENVIRONMENT is valid"
           else
-            echo "path=environments/non-prod/dev" >> $GITHUB_OUTPUT
+            echo "❌ Error: Environment $ENVIRONMENT not found or invalid"
+            echo "Available non-prod environments: ${{ steps.detect_envs.outputs.non_prod_envs }}"
+            echo "Check for production/staging environments in their respective directories"
+            exit 1
           fi
 
       # Run Terraform commands
