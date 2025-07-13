@@ -1,131 +1,321 @@
-# 🚀 GitHub Actions Setup Guide
+# 🛠️ Terraform Infrastructure Setup Guide
 
-This guide will help you set up GitHub Secrets and Workload Identity Federation for secure Terraform deployments.
+## Overview
+Complete setup guide for the automated Terraform infrastructure deployment system.
 
-## ✅ What's Already Configured
+## 🎯 Prerequisites
 
-### GCP Resources Created:
-- ✅ Service Account: `github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com`
-- ✅ IAM Roles: CloudSQL Admin, Storage Admin, Compute Network Admin
-- ✅ Workload Identity Pool: `github-actions-pool`
-- ✅ Workload Identity Provider: `github-provider`
-- ✅ Service Account Key: `github-actions-key.json` (backup method)
+### **Required Tools**
+- ✅ **Git**: Version control
+- ✅ **Terraform**: 1.8.2 or higher
+- ✅ **Google Cloud SDK**: For GCP authentication
+- ✅ **GitHub Account**: For repository access
+- ✅ **GCP Project**: With billing enabled
 
-## 🔐 Step 1: Set Up GitHub Secrets
+### **Required Permissions**
+- ✅ **GCP Project Owner**: For resource creation
+- ✅ **GitHub Repository Access**: For code management
+- ✅ **Workload Identity Federation**: For authentication
 
-Go to your GitHub repository: `https://github.com/paraskanwarit/das-l4-infra-np`
+## 🚀 Setup Process
 
-### Navigate to Settings → Secrets and Variables → Actions
+```mermaid
+graph TD
+    A[Clone Repository] --> B[Setup GCP Project]
+    B --> C[Configure Workload Identity]
+    C --> D[Setup GitHub Actions]
+    D --> E[Create GCS Bucket]
+    E --> F[Configure Environments]
+    F --> G[Test Deployment]
+    G --> H[✅ Setup Complete]
+    
+    style A fill:#e1f5fe
+    style H fill:#c8e6c9
+    style D fill:#fff3e0
+    style G fill:#fff3e0
+```
 
-Add these secrets:
+## 📋 Step-by-Step Setup
 
-### **Required Secrets:**
-
-1. **SQL_ROOT_PASSWORD**
-   - Value: `your-secure-root-password-here`
-   - Description: Root password for CloudSQL instance
-
-2. **SQL_APP_PASSWORD**
-   - Value: `your-secure-app-password-here`
-   - Description: Application user password for CloudSQL
-
-### **Backup Method (Service Account Key):**
-If you prefer to use service account keys instead of Workload Identity Federation:
-
-3. **GCP_SA_KEY** (Alternative to Workload Identity)
-   - Value: Copy the entire content of `github-actions-key.json`
-   - Description: Service account key JSON for GCP authentication
-
-4. **GCP_PROJECT_ID**
-   - Value: `affable-beaker-464822-b4`
-   - Description: GCP Project ID
-
-## 🔐 Step 2: Workload Identity Federation (Recommended)
-
-The GitHub Actions workflow is now configured to use Workload Identity Federation, which is more secure than service account keys.
-
-### Benefits:
-- ✅ No long-lived credentials stored in GitHub
-- ✅ Automatic token rotation
-- ✅ Fine-grained access control
-- ✅ Audit trail for authentication
-
-### How it works:
-1. GitHub Actions requests a token from GCP
-2. GCP validates the request using the Workload Identity Pool
-3. GCP issues a short-lived token for the service account
-4. Terraform uses this token for authentication
-
-## 🧪 Step 3: Test the Setup
-
-### Option 1: Test via GitHub Actions
-1. Push a change to the `main` branch
-2. Go to Actions tab in your GitHub repository
-3. Monitor the workflow execution
-
-### Option 2: Test Locally
+### **Step 1: Repository Setup**
 ```bash
+# Clone the repository
+git clone https://github.com/paraskanwarit/das-l4-infra-np.git
+cd das-l4-infra-np
+
+# Verify structure
+ls -la
+tree environments/
+```
+
+### **Step 2: GCP Project Setup**
+```bash
+# Set your GCP project
+gcloud config set project YOUR_PROJECT_ID
+
+# Enable required APIs
+gcloud services enable sqladmin.googleapis.com
+gcloud services enable secretmanager.googleapis.com
+gcloud services enable iamcredentials.googleapis.com
+```
+
+### **Step 3: Workload Identity Federation Setup**
+```bash
+# Create Workload Identity Pool
+gcloud iam workload-identity-pools create "github-actions-pool" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+
+# Create Workload Identity Provider
+gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+  --workload-identity-pool="github-actions-pool" \
+  --location="global" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+  --attribute-condition="attribute.repository=='paraskanwarit/das-l4-infra-np'"
+
+# Create Service Account
+gcloud iam service-accounts create "github-actions-sa" \
+  --display-name="GitHub Actions Service Account"
+
+# Grant necessary permissions
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/editor"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.admin"
+
+# Allow GitHub Actions to impersonate the service account
+gcloud iam service-accounts add-iam-policy-binding "github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/paraskanwarit/das-l4-infra-np"
+```
+
+### **Step 4: GCS Bucket Setup**
+```bash
+# Create GCS bucket for Terraform state
+gsutil mb gs://terraform-statefile-p
+
+# Set bucket permissions
+gsutil iam ch serviceAccount:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com:objectAdmin gs://terraform-statefile-p
+```
+
+### **Step 5: GitHub Secrets Setup**
+```bash
+# Get Workload Identity Provider resource name
+gcloud iam workload-identity-pools providers describe "github-provider" \
+  --workload-identity-pool="github-actions-pool" \
+  --location="global" \
+  --format="value(name)"
+
+# Add to GitHub repository secrets:
+# WORKLOAD_IDENTITY_PROVIDER: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
+# SERVICE_ACCOUNT: github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+### **Step 6: Environment Configuration**
+```bash
+# Update project ID in all environment files
+find environments -name "*.tf" -exec sed -i 's/affable-beaker-464822-b4/YOUR_PROJECT_ID/g' {} \;
+find environments -name "*.tfvars" -exec sed -i 's/affable-beaker-464822-b4/YOUR_PROJECT_ID/g' {} \;
+
+# Update network configuration
+find environments -name "*.tf" -exec sed -i 's/projects\/affable-beaker-464822-b4\/global\/networks\/default/projects\/YOUR_PROJECT_ID\/global\/networks\/default/g' {} \;
+find environments -name "*.tfvars" -exec sed -i 's/projects\/affable-beaker-464822-b4\/global\/networks\/default/projects\/YOUR_PROJECT_ID\/global\/networks\/default/g' {} \;
+```
+
+### **Step 7: Test Local Setup**
+```bash
+# Test Terraform configuration
 cd environments/non-prod/dev
-
-# Set environment variables
-export TF_VAR_sql_root_password="your-secure-root-password"
-export TF_VAR_sql_app_password="your-secure-app-password"
-
-# Test Terraform
-terraform plan
+terraform init -lock=false
+terraform validate
+terraform plan -lock=false -var="sql_root_password=test123" -var="sql_app_password=test456"
 ```
 
-## 🔧 Troubleshooting
-
-### Common Issues:
-
-1. **Authentication Failed**
-   - Ensure Workload Identity Pool is configured correctly
-   - Check service account permissions
-   - Verify GitHub repository name matches the attribute condition
-
-2. **Terraform Plan Fails**
-   - Check if all required secrets are set
-   - Verify project ID and region settings
-   - Ensure Terraform module source is accessible
-
-3. **Permission Denied**
-   - Verify service account has required IAM roles
-   - Check if the service account can access the GCS bucket for state files
-
-### Debug Commands:
+### **Step 8: Deploy to GitHub**
 ```bash
-# Check service account permissions
-gcloud projects get-iam-policy affable-beaker-464822-b4 --flatten="bindings[].members" --filter="bindings.members:github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com"
-
-# Check Workload Identity Pool
-gcloud iam workload-identity-pools describe github-actions-pool --location=global
-
-# Check Workload Identity Provider
-gcloud iam workload-identity-pools providers describe github-provider --workload-identity-pool=github-actions-pool --location=global
+# Commit and push changes
+git add .
+git commit -m "Initial setup: Configure for new project"
+git push origin main
 ```
 
-## 🔒 Security Best Practices
+## 🔧 Configuration Files
 
-1. **Use Workload Identity Federation** instead of service account keys
-2. **Rotate passwords regularly** for SQL instances
-3. **Use strong passwords** (12+ characters, mixed case, numbers, symbols)
-4. **Monitor access logs** in GCP Console
-5. **Review IAM permissions** regularly
+### **Environment Structure**
+```
+environments/non-prod/dev/
+├── main.tf          # CloudSQL module configuration
+├── variables.tf     # Variable definitions
+├── backend.tf       # Remote state configuration
+└── terraform.tfvars # Environment variables
+```
 
-## 📋 Checklist
+### **Backend Configuration**
+```hcl
+terraform {
+  backend "gcs" {
+    bucket  = "terraform-statefile-p"
+    prefix  = "dev/terraform/state"
+  }
+}
+```
 
-- [ ] Set up GitHub Secrets (SQL_ROOT_PASSWORD, SQL_APP_PASSWORD)
-- [ ] Test GitHub Actions workflow
-- [ ] Verify CloudSQL instance creation
-- [ ] Test database connectivity
-- [ ] Review security settings
-- [ ] Document any custom configurations
+### **Module Configuration**
+```hcl
+module "cloudsql" {
+  source           = "git::https://github.com/paraskanwarit/terraform-modules.git//cloudsql?ref=main"
+  instance_name    = "dev-sql-instance"
+  database_version = "POSTGRES_16"
+  region           = "australia-southeast1"
+  tier             = "db-perf-optimized-N-2"
+  availability_type = "REGIONAL"
+  disk_size        = 50
+  disk_type        = "PD_SSD"
+  ipv4_enabled     = false
+  private_network  = var.private_network
+  authorized_networks = []
+  root_password    = var.sql_root_password
+  db_user          = "devuser"
+  db_password      = var.sql_app_password
+  db_name          = "devdb"
+  labels = {
+    environment = "dev"
+    owner       = "team"
+  }
+}
+```
 
-## 🆘 Support
+## 🛡️ Security Configuration
 
-If you encounter issues:
-1. Check the GitHub Actions logs for detailed error messages
-2. Verify all secrets are correctly set
-3. Ensure GCP project has billing enabled
-4. Check if the Terraform module repository is accessible 
+### **Workload Identity Federation**
+- ✅ **No hardcoded credentials**
+- ✅ **Temporary authentication**
+- ✅ **Principle of least privilege**
+- ✅ **Audit trail enabled**
+
+### **State Management**
+- ✅ **Remote state storage**
+- ✅ **State locking enabled**
+- ✅ **State isolation per environment**
+- ✅ **Backup and recovery**
+
+### **Password Management**
+- ✅ **Random password generation**
+- ✅ **Secure storage in Secret Manager**
+- ✅ **Automatic replication**
+- ✅ **Access control**
+
+## 🔍 Verification Steps
+
+### **1. GitHub Actions Verification**
+```bash
+# Check workflow execution
+# Go to GitHub → Actions → Terraform Apply
+# Verify successful execution
+```
+
+### **2. GCP Resources Verification**
+```bash
+# Check CloudSQL instances
+gcloud sql instances list
+
+# Check secrets
+gcloud secrets list
+
+# Check state bucket
+gsutil ls gs://terraform-statefile-p/
+```
+
+### **3. Local Testing**
+```bash
+# Test Terraform commands
+cd environments/non-prod/dev
+terraform init -lock=false
+terraform plan -lock=false -var="sql_root_password=test123" -var="sql_app_password=test456"
+```
+
+## 🐛 Troubleshooting
+
+### **Common Issues**
+
+#### **1. Authentication Errors**
+```bash
+# Check Workload Identity setup
+gcloud auth list
+gcloud config get-value project
+
+# Verify service account permissions
+gcloud projects get-iam-policy YOUR_PROJECT_ID \
+  --flatten="bindings[].members" \
+  --format="table(bindings.role)" \
+  --filter="bindings.members:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+```
+
+#### **2. State Lock Errors**
+```bash
+# Clean up state locks
+gsutil rm gs://terraform-statefile-p/*/terraform/state/default.tflock
+```
+
+#### **3. Module Download Errors**
+```bash
+# Upgrade Terraform modules
+terraform init -upgrade
+```
+
+#### **4. Permission Errors**
+```bash
+# Check IAM permissions
+gcloud projects get-iam-policy YOUR_PROJECT_ID
+```
+
+## 📊 Setup Checklist
+
+### **Pre-Setup**
+- [ ] GCP project created with billing enabled
+- [ ] GitHub repository cloned
+- [ ] Required APIs enabled
+- [ ] Service account created
+
+### **Setup Process**
+- [ ] Workload Identity Federation configured
+- [ ] GCS bucket created
+- [ ] GitHub secrets configured
+- [ ] Environment files updated
+- [ ] Local testing completed
+
+### **Post-Setup**
+- [ ] GitHub Actions workflow successful
+- [ ] GCP resources created
+- [ ] Secrets stored properly
+- [ ] State management working
+- [ ] Documentation updated
+
+## 🎯 Success Criteria
+
+### **Functional Requirements**
+- ✅ GitHub Actions workflow executes successfully
+- ✅ CloudSQL instances are created
+- ✅ Passwords are stored in Secret Manager
+- ✅ State is managed in GCS bucket
+
+### **Non-Functional Requirements**
+- ✅ Setup time < 30 minutes
+- ✅ Zero manual intervention after setup
+- ✅ Security compliance achieved
+- ✅ Documentation complete
+
+## 📚 Next Steps
+
+After successful setup:
+
+1. **Add new environments** following the pattern
+2. **Customize configurations** for your needs
+3. **Monitor deployments** via GitHub Actions
+4. **Scale the system** as needed
+
+**This setup guide ensures a production-ready infrastructure automation system!** 🚀 
