@@ -5,13 +5,6 @@ on:
     branches: [ "main" ]
     paths:
       - 'environments/non-prod/**'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy (leave empty for all)'
-        required: false
-        type: string
-        default: ''
 
 jobs:
   apply:
@@ -39,14 +32,9 @@ jobs:
 
       - name: Deploy Environments
         run: |
-          # Get environments to deploy
-          if [ -n "${{ github.event.inputs.environment }}" ]; then
-            ENVIRONMENTS="${{ github.event.inputs.environment }}"
-            echo "Manual deploy requested for: $ENVIRONMENTS"
-          else
-            ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort)
-            echo "Auto-detected environments: $ENVIRONMENTS"
-          fi
+          # Get all environments to deploy
+          ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort)
+          echo "Auto-detected environments: $ENVIRONMENTS"
           
           # Deploy each environment
           for ENV in $ENVIRONMENTS; do

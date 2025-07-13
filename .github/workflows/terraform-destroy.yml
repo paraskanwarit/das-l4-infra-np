@@ -7,40 +7,11 @@ on:
     branches: [ "main" ]
     paths:
       - 'environments/non-prod/**'
-  pull_request:
-    branches: [ "main" ]
-  # Manual trigger for safety
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to destroy (leave empty for auto-detect)'
-        required: false
-        type: string
-        default: ''
-      confirm_destroy:
-        description: 'Type "DESTROY" to confirm'
-        required: true
-        type: string
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # Safety check job (only for manual triggers)
-  safety-check:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check Confirmation
-        run: |
-          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
-            echo "❌ Error: You must type 'DESTROY' to confirm destruction"
-            exit 1
-          fi
-          echo "✅ Confirmation received for destruction"
-
   # Main destroy job
   destroy:
-    needs: [safety-check]
-    if: always() && (needs.safety-check.result == 'success' || needs.safety-check.result == 'skipped')
     runs-on: ubuntu-latest
     
     # Add permissions for Workload Identity Federation
@@ -88,35 +59,29 @@ jobs:
             fi
           done
           
-          # Determine what to destroy
-          if [ -n "${{ github.event.inputs.environment }}" ]; then
-            ENVIRONMENTS_TO_DESTROY="${{ github.event.inputs.environment }}"
-            echo "Manual destroy requested for: $ENVIRONMENTS_TO_DESTROY"
-          elif [ -n "$DELETED_ENVIRONMENTS" ]; then
-            ENVIRONMENTS_TO_DESTROY="$DELETED_ENVIRONMENTS"
-            echo "Auto-destroying deleted environments: $ENVIRONMENTS_TO_DESTROY"
+          if [ -n "$DELETED_ENVIRONMENTS" ]; then
+            echo "Auto-destroying deleted environments: $DELETED_ENVIRONMENTS"
+            
+            # Destroy each environment
+            for ENV in $DELETED_ENVIRONMENTS; do
+              echo "🗑️ Destroying $ENV environment..."
+              
+              # Get config from previous commit
+              ENV_PATH="environments/non-prod/$ENV"
+              mkdir -p /tmp/$ENV
+              
+              git show HEAD~1:$ENV_PATH/main.tf > /tmp/$ENV/main.tf || echo "Could not get main.tf"
+              git show HEAD~1:$ENV_PATH/variables.tf > /tmp/$ENV/variables.tf || echo "Could not get variables.tf"
+              git show HEAD~1:$ENV_PATH/terraform.tfvars > /tmp/$ENV/terraform.tfvars || echo "Could not get terraform.tfvars"
+              git show HEAD~1:$ENV_PATH/backend.tf > /tmp/$ENV/backend.tf || echo "Could not get backend.tf"
+              
+              # Terraform destroy
+              terraform -chdir=/tmp/$ENV init
+              terraform -chdir=/tmp/$ENV plan -destroy -var="sql_root_password=dummy" -var="sql_app_password=dummy"
+              terraform -chdir=/tmp/$ENV destroy -auto-approve -var="sql_root_password=dummy" -var="sql_app_password=dummy"
+              
+              echo "✅ $ENV destroyed successfully"
+            done
           else
             echo "No environments to destroy"
-            exit 0
-          fi
-          
-          # Destroy each environment
-          for ENV in $ENVIRONMENTS_TO_DESTROY; do
-            echo "🗑️ Destroying $ENV environment..."
-            
-            # Get config from previous commit
-            ENV_PATH="environments/non-prod/$ENV"
-            mkdir -p /tmp/$ENV
-            
-            git show HEAD~1:$ENV_PATH/main.tf > /tmp/$ENV/main.tf || echo "Could not get main.tf"
-            git show HEAD~1:$ENV_PATH/variables.tf > /tmp/$ENV/variables.tf || echo "Could not get variables.tf"
-            git show HEAD~1:$ENV_PATH/terraform.tfvars > /tmp/$ENV/terraform.tfvars || echo "Could not get terraform.tfvars"
-            git show HEAD~1:$ENV_PATH/backend.tf > /tmp/$ENV/backend.tf || echo "Could not get backend.tf"
-            
-            # Terraform destroy
-            terraform -chdir=/tmp/$ENV init
-            terraform -chdir=/tmp/$ENV plan -destroy -var="sql_root_password=dummy" -var="sql_app_password=dummy"
-            terraform -chdir=/tmp/$ENV destroy -auto-approve -var="sql_root_password=dummy" -var="sql_app_password=dummy"
-            
-            echo "✅ $ENV destroyed successfully"
-          done 
+          fi 
