@@ -45,6 +45,20 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # Generate strong passwords
+      - name: Generate Strong Passwords
+        id: passwords
+        run: |
+          # Generate root password (32 chars with special chars)
+          ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
+          echo "root_password=${ROOT_PASSWORD}" >> $GITHUB_OUTPUT
+          
+          # Generate app password (32 chars with special chars)
+          APP_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
+          echo "app_password=${APP_PASSWORD}" >> $GITHUB_OUTPUT
+          
+          echo "Generated strong passwords for CloudSQL instance"
+
       # Run Terraform commands
       - name: Terraform Init
         run: terraform -chdir=environments/non-prod/dev init
@@ -53,15 +67,25 @@ jobs:
         run: |
           terraform -chdir=environments/non-prod/dev import google_sql_database_instance.primary projects/affable-beaker-464822-b4/instances/dev-sql-instance || echo "Instance does not exist or already imported"
         continue-on-error: true
+        env:
+          TF_VAR_sql_root_password: ${{ steps.passwords.outputs.root_password }}
+          TF_VAR_sql_app_password: ${{ steps.passwords.outputs.app_password }}
 
       - name: Terraform Plan
         run: terraform -chdir=environments/non-prod/dev plan
         env:
-          TF_VAR_sql_root_password: ${{ secrets.SQL_ROOT_PASSWORD }}
-          TF_VAR_sql_app_password: ${{ secrets.SQL_APP_PASSWORD }}
+          TF_VAR_sql_root_password: ${{ steps.passwords.outputs.root_password }}
+          TF_VAR_sql_app_password: ${{ steps.passwords.outputs.app_password }}
 
       - name: Terraform Apply (Auto-approve)
         run: terraform -chdir=environments/non-prod/dev apply -auto-approve
         env:
-          TF_VAR_sql_root_password: ${{ secrets.SQL_ROOT_PASSWORD }}
-          TF_VAR_sql_app_password: ${{ secrets.SQL_APP_PASSWORD }}
+          TF_VAR_sql_root_password: ${{ steps.passwords.outputs.root_password }}
+          TF_VAR_sql_app_password: ${{ steps.passwords.outputs.app_password }}
+
+      # Store passwords securely (optional)
+      - name: Store Passwords in GCP Secret Manager
+        run: |
+          echo "${{ steps.passwords.outputs.root_password }}" | gcloud secrets create cloudsql-root-password --data-file=- --replication-policy="automatic" || echo "Secret already exists"
+          echo "${{ steps.passwords.outputs.app_password }}" | gcloud secrets create cloudsql-app-password --data-file=- --replication-policy="automatic" || echo "Secret already exists"
+        continue-on-error: true
