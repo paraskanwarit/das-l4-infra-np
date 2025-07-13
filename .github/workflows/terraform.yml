@@ -24,14 +24,21 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
+      
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.8.2  # Or whatever version you're using
 
-      - name: Change directory to environment
-        run: cd environments/non-prod/dev
-        shell: bash
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/566479143581/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       # Run Terraform commands
       - name: Terraform Init
@@ -39,6 +46,12 @@ jobs:
 
       - name: Terraform Plan
         run: terraform -chdir=environments/non-prod/dev plan
+        env:
+          TF_VAR_sql_root_password: ${{ secrets.SQL_ROOT_PASSWORD }}
+          TF_VAR_sql_app_password: ${{ secrets.SQL_APP_PASSWORD }}
 
       - name: Terraform Apply (Auto-approve)
         run: terraform -chdir=environments/non-prod/dev apply -auto-approve
+        env:
+          TF_VAR_sql_root_password: ${{ secrets.SQL_ROOT_PASSWORD }}
+          TF_VAR_sql_app_password: ${{ secrets.SQL_APP_PASSWORD }}
