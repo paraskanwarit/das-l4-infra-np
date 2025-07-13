@@ -38,7 +38,7 @@ jobs:
           
           # Deploy each environment
           for ENV in $ENVIRONMENTS; do
-            echo "🚀 Deploying $ENV environment..."
+            echo "Deploying $ENV environment..."
             
             ENV_PATH="environments/non-prod/$ENV"
             INSTANCE_NAME="${ENV}-sql-instance"
@@ -56,5 +56,5 @@ jobs:
             echo "$ROOT_PASSWORD" | gcloud secrets create cloudsql-root-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
             echo "$APP_PASSWORD" | gcloud secrets create cloudsql-app-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
             
-            echo "✅ $ENV deployed successfully"
+            echo " $ENV deployed successfully"
           done
