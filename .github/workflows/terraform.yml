@@ -1,83 +1,34 @@
-# This is a basic workflow to help you get started with Actions
+name: Terraform Apply
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    paths:
+      - 'environments/non-prod/**'
   workflow_dispatch:
     inputs:
-      action:
-        description: 'Action to perform'
-        required: true
-        default: 'apply'
-        type: choice
-        options:
-          - apply
-      target_environment:
-        description: 'Specific environment to deploy (leave empty for all)'
+      environment:
+        description: 'Environment to deploy (leave empty for all)'
         required: false
         type: string
         default: ''
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # Check if we should run apply (no deletions detected)
-  check-apply:
-    runs-on: ubuntu-latest
-    outputs:
-      should-apply: ${{ steps.check.outputs.should_apply }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Check if apply should run
-        id: check
-        run: |
-          # Get list of current environments
-          CURRENT_ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" 2>/dev/null | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort || echo "")
-          
-          echo "Current environments: $CURRENT_ENVIRONMENTS"
-          
-          # Always run apply if there are environments to deploy
-          if [ -n "$CURRENT_ENVIRONMENTS" ]; then
-            echo "should_apply=true" >> $GITHUB_OUTPUT
-            echo "✅ Environments found: $CURRENT_ENVIRONMENTS - proceeding with apply workflow"
-          else
-            echo "should_apply=false" >> $GITHUB_OUTPUT
-            echo "❌ No environments found - skipping apply workflow"
-          fi
-
-  # Apply job
   apply:
-    needs: check-apply
-    if: needs.check-apply.outputs.should-apply == 'true'
     runs-on: ubuntu-latest
-    
-    # Add permissions for Workload Identity Federation
     permissions:
       contents: 'read'
       id-token: 'write'
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
       
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.8.2  # Or whatever version you're using
+          terraform_version: 1.8.2
 
       - name: Google Auth
-        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/566479143581/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
@@ -86,59 +37,37 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # Detect and deploy to environments
-      - name: Deploy to Environments
+      - name: Deploy Environments
         run: |
-          # Find all directories in non-prod that contain main.tf
-          ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort)
-          
-          echo "Available environments: $ENVIRONMENTS"
-          
-          # If specific environment is requested, only deploy to that one
-          if [ -n "${{ github.event.inputs.target_environment }}" ]; then
-            ENVIRONMENTS="${{ github.event.inputs.target_environment }}"
-            echo "Deploying to specific environment: $ENVIRONMENTS"
+          # Get environments to deploy
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            ENVIRONMENTS="${{ github.event.inputs.environment }}"
+            echo "Manual deploy requested for: $ENVIRONMENTS"
+          else
+            ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort)
+            echo "Auto-detected environments: $ENVIRONMENTS"
           fi
           
-          # Deploy to each environment sequentially to avoid state lock conflicts
+          # Deploy each environment
           for ENV in $ENVIRONMENTS; do
-            echo "🚀 Deploying to environment: $ENV"
+            echo "🚀 Deploying $ENV environment..."
             
-            # Set environment path
             ENV_PATH="environments/non-prod/$ENV"
             INSTANCE_NAME="${ENV}-sql-instance"
             
-            # Generate passwords for this environment
+            # Generate passwords
             ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
             APP_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
             
-            echo "Generated passwords for $ENV environment"
-            
-            # Run Terraform commands with state lock handling
-            echo "📁 Initializing Terraform for $ENV..."
+            # Terraform commands
             terraform -chdir=$ENV_PATH init
-            
-            # Force unlock if there's a stale lock (with timeout)
-            echo "🔓 Checking for stale state locks..."
-            terraform -chdir=$ENV_PATH force-unlock -force 1752407610536032 || echo "No stale lock found or already unlocked"
-            
-            echo "📥 Importing existing instance for $ENV (if exists)..."
             terraform -chdir=$ENV_PATH import module.cloudsql.google_sql_database_instance.primary projects/affable-beaker-464822-b4/instances/$INSTANCE_NAME || echo "Instance does not exist or already imported"
-            
-            echo "📋 Planning Terraform for $ENV..."
             terraform -chdir=$ENV_PATH plan -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
-            
-            echo "✅ Applying Terraform for $ENV..."
             terraform -chdir=$ENV_PATH apply -auto-approve -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
             
-            # Store passwords securely
-            echo "🔐 Storing passwords for $ENV..."
+            # Store passwords
             echo "$ROOT_PASSWORD" | gcloud secrets create cloudsql-root-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
             echo "$APP_PASSWORD" | gcloud secrets create cloudsql-app-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
             
-            echo "✅ Successfully deployed $ENV environment"
-            echo "----------------------------------------"
-            
-            # Add a small delay between environments to avoid conflicts
-            sleep 5
+            echo "✅ $ENV deployed successfully"
           done
