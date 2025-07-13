@@ -49,6 +49,11 @@ jobs:
       - name: Terraform Init
         run: terraform -chdir=environments/non-prod/dev init
 
+      - name: Import existing CloudSQL instance (if exists)
+        run: |
+          terraform -chdir=environments/non-prod/dev import google_sql_database_instance.primary projects/affable-beaker-464822-b4/instances/dev-sql-instance || echo "Instance does not exist or already imported"
+        continue-on-error: true
+
       - name: Terraform Plan
         run: terraform -chdir=environments/non-prod/dev plan
         env:
