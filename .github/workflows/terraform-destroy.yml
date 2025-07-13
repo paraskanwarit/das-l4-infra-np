@@ -1,0 +1,103 @@
+name: Terraform Destroy
+
+# Controls when the workflow will run
+on:
+  # Manual trigger only for safety
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm'
+        required: true
+        type: string
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # Safety check job
+  safety-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "❌ Error: You must type 'DESTROY' to confirm destruction"
+            exit 1
+          fi
+          echo "✅ Confirmation received for destroying ${{ github.event.inputs.environment }} environment"
+
+  # Main destroy job
+  destroy:
+    needs: safety-check
+    runs-on: ubuntu-latest
+    
+    # Add permissions for Workload Identity Federation
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/566479143581/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Set environment path based on input
+      - name: Set Environment Path
+        id: env_path
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "path=environments/production/prod" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.environment }}" = "staging" ]; then
+            echo "path=environments/staging/staging" >> $GITHUB_OUTPUT
+          else
+            echo "path=environments/non-prod/dev" >> $GITHUB_OUTPUT
+          fi
+
+      # Run Terraform commands
+      - name: Terraform Init
+        run: terraform -chdir=${{ steps.env_path.outputs.path }} init
+
+      - name: Terraform Plan Destroy
+        run: terraform -chdir=${{ steps.env_path.outputs.path }} plan -destroy
+        env:
+          TF_VAR_sql_root_password: "dummy-password"
+          TF_VAR_sql_app_password: "dummy-password"
+
+      - name: Terraform Destroy (Auto-approve)
+        run: terraform -chdir=${{ steps.env_path.outputs.path }} destroy -auto-approve
+        env:
+          TF_VAR_sql_root_password: "dummy-password"
+          TF_VAR_sql_app_password: "dummy-password"
+
+      - name: Cleanup State Files
+        run: |
+          rm -rf ${{ steps.env_path.outputs.path }}/.terraform*
+          rm -f ${{ steps.env_path.outputs.path }}/terraform.tfstate*
+          echo "🧹 Cleaned up Terraform state files"
+
+      - name: Notify Destruction Complete
+        run: |
+          echo "🗑️ Successfully destroyed ${{ github.event.inputs.environment }} environment"
+          echo "📁 Affected path: ${{ steps.env_path.outputs.path }}" 

@@ -12,14 +12,40 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm destruction (required if action is destroy)'
+        required: false
+        type: string
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  # Safety check for destroy operations
+  safety-check:
+    if: github.event.inputs.action == 'destroy'
     runs-on: ubuntu-latest
+    steps:
+      - name: Check Destroy Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "❌ Error: You must type 'DESTROY' to confirm destruction"
+            exit 1
+          fi
+          echo "✅ Confirmation received for destroy operation"
 
+  # Apply job
+  apply:
+    if: github.event.inputs.action != 'destroy'
+    runs-on: ubuntu-latest
+    
     # Add permissions for Workload Identity Federation
     permissions:
       contents: 'read'
@@ -83,9 +109,63 @@ jobs:
           TF_VAR_sql_root_password: ${{ steps.passwords.outputs.root_password }}
           TF_VAR_sql_app_password: ${{ steps.passwords.outputs.app_password }}
 
-      # Store passwords securely (optional)
+      # Store passwords securely
       - name: Store Passwords in GCP Secret Manager
         run: |
           echo "${{ steps.passwords.outputs.root_password }}" | gcloud secrets create cloudsql-root-password --data-file=- --replication-policy="automatic" || echo "Secret already exists"
           echo "${{ steps.passwords.outputs.app_password }}" | gcloud secrets create cloudsql-app-password --data-file=- --replication-policy="automatic" || echo "Secret already exists"
         continue-on-error: true
+
+  # Destroy job
+  destroy:
+    if: github.event.inputs.action == 'destroy'
+    needs: safety-check
+    runs-on: ubuntu-latest
+    
+    # Add permissions for Workload Identity Federation
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2  # Or whatever version you're using
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/566479143581/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Run Terraform commands
+      - name: Terraform Init
+        run: terraform -chdir=environments/non-prod/dev init
+
+      - name: Terraform Plan Destroy
+        run: terraform -chdir=environments/non-prod/dev plan -destroy
+        env:
+          TF_VAR_sql_root_password: "dummy-password"
+          TF_VAR_sql_app_password: "dummy-password"
+
+      - name: Terraform Destroy (Auto-approve)
+        run: terraform -chdir=environments/non-prod/dev destroy -auto-approve
+        env:
+          TF_VAR_sql_root_password: "dummy-password"
+          TF_VAR_sql_app_password: "dummy-password"
+
+      # Cleanup step
+      - name: Cleanup State Files
+        run: |
+          rm -rf environments/non-prod/dev/.terraform*
+          rm -f environments/non-prod/dev/terraform.tfstate*
+          echo "🧹 Cleaned up Terraform state files"
