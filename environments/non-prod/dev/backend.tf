@@ -3,4 +3,4 @@ terraform {
     bucket  = "terraform-statefile-p"
     prefix  = "dev/terraform/state"
   }
-}
+} 
