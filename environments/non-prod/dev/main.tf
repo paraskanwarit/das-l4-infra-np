@@ -8,7 +8,7 @@ module "cloudsql" {
   instance_name    = "dev-sql-instance"
   database_version = "POSTGRES_16"
   region           = "australia-southeast1"
-  tier             = "db-custom-2-7680"
+  tier             = "db-f1-micro"
   availability_type = "REGIONAL"
   disk_size        = 50
   disk_type        = "PD_SSD"
