@@ -2,19 +2,19 @@ name: Terraform Destroy
 
 # Controls when the workflow will run
 on:
-  # Manual trigger only for safety
+  # Automatic trigger on file deletions
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  # Manual trigger for safety
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment to destroy'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - qa1
-          - staging
-          - production
+      target_environment:
+        description: 'Specific environment to destroy (leave empty for all)'
+        required: false
+        type: string
+        default: ''
       confirm_destroy:
         description: 'Type "DESTROY" to confirm'
         required: true
@@ -22,8 +22,9 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # Safety check job
+  # Safety check job (only for manual triggers)
   safety-check:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Check Confirmation
@@ -32,11 +33,12 @@ jobs:
             echo "❌ Error: You must type 'DESTROY' to confirm destruction"
             exit 1
           fi
-          echo "✅ Confirmation received for destroying ${{ github.event.inputs.environment }} environment"
+          echo "✅ Confirmation received for destruction"
 
   # Main destroy job
   destroy:
-    needs: safety-check
+    needs: [safety-check]
+    if: always() && (needs.safety-check.result == 'success' || needs.safety-check.result == 'skipped')
     runs-on: ubuntu-latest
     
     # Add permissions for Workload Identity Federation
@@ -48,6 +50,8 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history to detect deletions
       
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -64,63 +68,84 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # Detect available environments dynamically
-      - name: Detect Available Environments
-        id: detect_envs
+      # Detect deleted environments and environments to destroy
+      - name: Detect Environments to Destroy
+        id: detect_destroy
         run: |
-          # Find all directories in non-prod that contain main.tf
-          NON_PROD_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort)
-          echo "non_prod_envs=$(echo $NON_PROD_ENVS | tr '\n' ' ' | sed 's/ $//')" >> $GITHUB_OUTPUT
-          echo "Available non-prod environments: $NON_PROD_ENVS"
-
-      # Set environment path based on input
-      - name: Set Environment Path
-        id: env_path
-        run: |
-          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          # Get list of environments that existed before this commit
+          PREVIOUS_ENVIRONMENTS=$(git show HEAD~1:environments/non-prod/ 2>/dev/null | grep -E "^d.*" | awk '{print $NF}' | grep -v "^$" || echo "")
           
-          # Check if it's a non-prod environment
-          if [ -d "environments/non-prod/$ENVIRONMENT" ] && [ -f "environments/non-prod/$ENVIRONMENT/main.tf" ]; then
-            echo "path=environments/non-prod/$ENVIRONMENT" >> $GITHUB_OUTPUT
-            echo "✅ Non-prod environment $ENVIRONMENT is valid"
-          # Check if it's a production environment
-          elif [ -d "environments/production/$ENVIRONMENT" ] && [ -f "environments/production/$ENVIRONMENT/main.tf" ]; then
-            echo "path=environments/production/$ENVIRONMENT" >> $GITHUB_OUTPUT
-            echo "✅ Production environment $ENVIRONMENT is valid"
-          # Check if it's a staging environment
-          elif [ -d "environments/staging/$ENVIRONMENT" ] && [ -f "environments/staging/$ENVIRONMENT/main.tf" ]; then
-            echo "path=environments/staging/$ENVIRONMENT" >> $GITHUB_OUTPUT
-            echo "✅ Staging environment $ENVIRONMENT is valid"
+          # Get list of current environments
+          CURRENT_ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" 2>/dev/null | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort || echo "")
+          
+          echo "Previous environments: $PREVIOUS_ENVIRONMENTS"
+          echo "Current environments: $CURRENT_ENVIRONMENTS"
+          
+          # Find deleted environments (environments that existed before but not now)
+          DELETED_ENVIRONMENTS=""
+          for env in $PREVIOUS_ENVIRONMENTS; do
+            if ! echo "$CURRENT_ENVIRONMENTS" | grep -q "$env"; then
+              DELETED_ENVIRONMENTS="$DELETED_ENVIRONMENTS $env"
+            fi
+          done
+          
+          # If manual trigger with specific environment, use that
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.target_environment }}" ]; then
+            ENVIRONMENTS_TO_DESTROY="${{ github.event.inputs.target_environment }}"
+            echo "Manual destroy requested for: $ENVIRONMENTS_TO_DESTROY"
+          # If there are deleted environments, destroy them
+          elif [ -n "$DELETED_ENVIRONMENTS" ]; then
+            ENVIRONMENTS_TO_DESTROY="$DELETED_ENVIRONMENTS"
+            echo "Auto-destroying deleted environments: $ENVIRONMENTS_TO_DESTROY"
+          # If manual trigger without specific environment, destroy all current
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENTS_TO_DESTROY="$CURRENT_ENVIRONMENTS"
+            echo "Manual destroy requested for all environments: $ENVIRONMENTS_TO_DESTROY"
           else
-            echo "❌ Error: Environment $ENVIRONMENT not found or invalid"
-            echo "Available non-prod environments: ${{ steps.detect_envs.outputs.non_prod_envs }}"
-            echo "Check for production/staging environments in their respective directories"
-            exit 1
+            echo "No environments to destroy"
+            exit 0
           fi
+          
+          echo "environments_to_destroy=$(echo $ENVIRONMENTS_TO_DESTROY | tr ' ' '\n' | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
+          echo "Environments to destroy: $ENVIRONMENTS_TO_DESTROY"
 
-      # Run Terraform commands
-      - name: Terraform Init
-        run: terraform -chdir=${{ steps.env_path.outputs.path }} init
-
-      - name: Terraform Plan Destroy
-        run: terraform -chdir=${{ steps.env_path.outputs.path }} plan -destroy
-        env:
-          TF_VAR_sql_root_password: "dummy-password"
-          TF_VAR_sql_app_password: "dummy-password"
-
-      - name: Terraform Destroy (Auto-approve)
-        run: terraform -chdir=${{ steps.env_path.outputs.path }} destroy -auto-approve
-        env:
-          TF_VAR_sql_root_password: "dummy-password"
-          TF_VAR_sql_app_password: "dummy-password"
-
-      - name: Cleanup State Files
+      # Destroy environments
+      - name: Destroy Environments
         run: |
-          rm -rf ${{ steps.env_path.outputs.path }}/.terraform*
-          rm -f ${{ steps.env_path.outputs.path }}/terraform.tfstate*
-          echo "🧹 Cleaned up Terraform state files"
-
-      - name: Notify Destruction Complete
-        run: |
-          echo "🗑️ Successfully destroyed ${{ github.event.inputs.environment }} environment"
-          echo "📁 Affected path: ${{ steps.env_path.outputs.path }}" 
+          ENVIRONMENTS_TO_DESTROY='${{ steps.detect_destroy.outputs.environments_to_destroy }}'
+          
+          # Convert JSON array back to space-separated list
+          ENVIRONMENTS=$(echo $ENVIRONMENTS_TO_DESTROY | jq -r '.[]' | tr '\n' ' ')
+          
+          echo "Starting destruction of environments: $ENVIRONMENTS"
+          
+          # Destroy each environment
+          for ENV in $ENVIRONMENTS; do
+            echo "🗑️ Destroying environment: $ENV"
+            
+            # Set environment path (use previous commit to get the config)
+            ENV_PATH="environments/non-prod/$ENV"
+            
+            # Checkout the previous commit to get the environment config
+            echo "📁 Getting environment config from previous commit..."
+            git show HEAD~1:$ENV_PATH/main.tf > /tmp/main.tf || echo "Could not get main.tf from previous commit"
+            git show HEAD~1:$ENV_PATH/variables.tf > /tmp/variables.tf || echo "Could not get variables.tf from previous commit"
+            git show HEAD~1:$ENV_PATH/terraform.tfvars > /tmp/terraform.tfvars || echo "Could not get terraform.tfvars from previous commit"
+            git show HEAD~1:$ENV_PATH/backend.tf > /tmp/backend.tf || echo "Could not get backend.tf from previous commit"
+            
+            # Create temporary directory for the environment
+            mkdir -p /tmp/$ENV
+            cp /tmp/*.tf /tmp/$ENV/ 2>/dev/null || true
+            
+            echo "📁 Initializing Terraform for $ENV..."
+            terraform -chdir=/tmp/$ENV init
+            
+            echo "📋 Planning destroy for $ENV..."
+            terraform -chdir=/tmp/$ENV plan -destroy -var="sql_root_password=dummy-password" -var="sql_app_password=dummy-password"
+            
+            echo "💥 Destroying $ENV..."
+            terraform -chdir=/tmp/$ENV destroy -auto-approve -var="sql_root_password=dummy-password" -var="sql_app_password=dummy-password"
+            
+            echo "✅ Successfully destroyed $ENV environment"
+            echo "----------------------------------------"
+          done 
