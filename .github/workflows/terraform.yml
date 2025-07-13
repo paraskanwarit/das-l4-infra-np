@@ -28,8 +28,49 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  # Check if we should run apply (no deletions detected)
+  check-apply:
+    runs-on: ubuntu-latest
+    outputs:
+      should-apply: ${{ steps.check.outputs.should_apply }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check if apply should run
+        id: check
+        run: |
+          # Get list of environments that existed before this commit
+          PREVIOUS_ENVIRONMENTS=$(git show HEAD~1:environments/non-prod/ 2>/dev/null | grep -E "^d.*" | awk '{print $NF}' | grep -v "^$" || echo "")
+          
+          # Get list of current environments
+          CURRENT_ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" 2>/dev/null | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort || echo "")
+          
+          echo "Previous environments: $PREVIOUS_ENVIRONMENTS"
+          echo "Current environments: $CURRENT_ENVIRONMENTS"
+          
+          # Check if any environments were deleted
+          DELETED_ENVIRONMENTS=""
+          for env in $PREVIOUS_ENVIRONMENTS; do
+            if ! echo "$CURRENT_ENVIRONMENTS" | grep -q "$env"; then
+              DELETED_ENVIRONMENTS="$DELETED_ENVIRONMENTS $env"
+            fi
+          done
+          
+          if [ -n "$DELETED_ENVIRONMENTS" ]; then
+            echo "should_apply=false" >> $GITHUB_OUTPUT
+            echo "❌ Environments were deleted: $DELETED_ENVIRONMENTS - skipping apply workflow"
+            echo "The destroy workflow will handle cleanup"
+          else
+            echo "should_apply=true" >> $GITHUB_OUTPUT
+            echo "✅ No environments deleted - proceeding with apply workflow"
+          fi
+
   # Apply job
   apply:
+    needs: check-apply
+    if: needs.check-apply.outputs.should-apply == 'true'
     runs-on: ubuntu-latest
     
     # Add permissions for Workload Identity Federation

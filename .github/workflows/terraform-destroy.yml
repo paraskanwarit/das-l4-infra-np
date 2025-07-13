@@ -35,10 +35,64 @@ jobs:
           fi
           echo "✅ Confirmation received for destruction"
 
+  # Check if we should run destroy (deletions detected)
+  check-destroy:
+    runs-on: ubuntu-latest
+    outputs:
+      should-destroy: ${{ steps.check.outputs.should_destroy }}
+      environments-to-destroy: ${{ steps.check.outputs.environments_to_destroy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check if destroy should run
+        id: check
+        run: |
+          # Get list of environments that existed before this commit
+          PREVIOUS_ENVIRONMENTS=$(git show HEAD~1:environments/non-prod/ 2>/dev/null | grep -E "^d.*" | awk '{print $NF}' | grep -v "^$" || echo "")
+          
+          # Get list of current environments
+          CURRENT_ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" 2>/dev/null | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort || echo "")
+          
+          echo "Previous environments: $PREVIOUS_ENVIRONMENTS"
+          echo "Current environments: $CURRENT_ENVIRONMENTS"
+          
+          # Find deleted environments (environments that existed before but not now)
+          DELETED_ENVIRONMENTS=""
+          for env in $PREVIOUS_ENVIRONMENTS; do
+            if ! echo "$CURRENT_ENVIRONMENTS" | grep -q "$env"; then
+              DELETED_ENVIRONMENTS="$DELETED_ENVIRONMENTS $env"
+            fi
+          done
+          
+          # If manual trigger with specific environment, use that
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.target_environment }}" ]; then
+            ENVIRONMENTS_TO_DESTROY="${{ github.event.inputs.target_environment }}"
+            echo "should_destroy=true" >> $GITHUB_OUTPUT
+            echo "Manual destroy requested for: $ENVIRONMENTS_TO_DESTROY"
+          # If there are deleted environments, destroy them
+          elif [ -n "$DELETED_ENVIRONMENTS" ]; then
+            ENVIRONMENTS_TO_DESTROY="$DELETED_ENVIRONMENTS"
+            echo "should_destroy=true" >> $GITHUB_OUTPUT
+            echo "Auto-destroying deleted environments: $ENVIRONMENTS_TO_DESTROY"
+          # If manual trigger without specific environment, destroy all current
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENTS_TO_DESTROY="$CURRENT_ENVIRONMENTS"
+            echo "should_destroy=true" >> $GITHUB_OUTPUT
+            echo "Manual destroy requested for all environments: $ENVIRONMENTS_TO_DESTROY"
+          else
+            echo "should_destroy=false" >> $GITHUB_OUTPUT
+            echo "No environments to destroy"
+          fi
+          
+          echo "environments_to_destroy=$(echo $ENVIRONMENTS_TO_DESTROY | tr ' ' '\n' | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
+          echo "Environments to destroy: $ENVIRONMENTS_TO_DESTROY"
+
   # Main destroy job
   destroy:
-    needs: [safety-check]
-    if: always() && (needs.safety-check.result == 'success' || needs.safety-check.result == 'skipped')
+    needs: [safety-check, check-destroy]
+    if: always() && (needs.safety-check.result == 'success' || needs.safety-check.result == 'skipped') && needs.check-destroy.outputs.should-destroy == 'true'
     runs-on: ubuntu-latest
     
     # Add permissions for Workload Identity Federation
@@ -68,51 +122,10 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # Detect deleted environments and environments to destroy
-      - name: Detect Environments to Destroy
-        id: detect_destroy
-        run: |
-          # Get list of environments that existed before this commit
-          PREVIOUS_ENVIRONMENTS=$(git show HEAD~1:environments/non-prod/ 2>/dev/null | grep -E "^d.*" | awk '{print $NF}' | grep -v "^$" || echo "")
-          
-          # Get list of current environments
-          CURRENT_ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" 2>/dev/null | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort || echo "")
-          
-          echo "Previous environments: $PREVIOUS_ENVIRONMENTS"
-          echo "Current environments: $CURRENT_ENVIRONMENTS"
-          
-          # Find deleted environments (environments that existed before but not now)
-          DELETED_ENVIRONMENTS=""
-          for env in $PREVIOUS_ENVIRONMENTS; do
-            if ! echo "$CURRENT_ENVIRONMENTS" | grep -q "$env"; then
-              DELETED_ENVIRONMENTS="$DELETED_ENVIRONMENTS $env"
-            fi
-          done
-          
-          # If manual trigger with specific environment, use that
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.target_environment }}" ]; then
-            ENVIRONMENTS_TO_DESTROY="${{ github.event.inputs.target_environment }}"
-            echo "Manual destroy requested for: $ENVIRONMENTS_TO_DESTROY"
-          # If there are deleted environments, destroy them
-          elif [ -n "$DELETED_ENVIRONMENTS" ]; then
-            ENVIRONMENTS_TO_DESTROY="$DELETED_ENVIRONMENTS"
-            echo "Auto-destroying deleted environments: $ENVIRONMENTS_TO_DESTROY"
-          # If manual trigger without specific environment, destroy all current
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENVIRONMENTS_TO_DESTROY="$CURRENT_ENVIRONMENTS"
-            echo "Manual destroy requested for all environments: $ENVIRONMENTS_TO_DESTROY"
-          else
-            echo "No environments to destroy"
-            exit 0
-          fi
-          
-          echo "environments_to_destroy=$(echo $ENVIRONMENTS_TO_DESTROY | tr ' ' '\n' | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
-          echo "Environments to destroy: $ENVIRONMENTS_TO_DESTROY"
-
       # Destroy environments
       - name: Destroy Environments
         run: |
-          ENVIRONMENTS_TO_DESTROY='${{ steps.detect_destroy.outputs.environments_to_destroy }}'
+          ENVIRONMENTS_TO_DESTROY='${{ needs.check-destroy.outputs.environments-to-destroy }}'
           
           # Convert JSON array back to space-separated list
           ENVIRONMENTS=$(echo $ENVIRONMENTS_TO_DESTROY | jq -r '.[]' | tr '\n' ' ')
