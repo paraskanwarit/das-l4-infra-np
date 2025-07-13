@@ -26,21 +26,44 @@ jobs:
         with:
           fetch-depth: 0  # Fetch full history to detect deletions
       
+      - name: Check if files were deleted
+        id: check-deletions
+        run: |
+          # Check if any environment directories were deleted
+          DELETED_ENVS=$(git diff --name-only --diff-filter=D HEAD~1 HEAD | grep "^environments/non-prod/" | grep -E "/[^/]+/$" | sed 's|environments/non-prod/||' | sed 's|/$||' || echo "")
+          if [ -n "$DELETED_ENVS" ]; then
+            echo "deleted=true" >> $GITHUB_OUTPUT
+            echo "Found deleted environments: $DELETED_ENVS"
+          else
+            echo "deleted=false" >> $GITHUB_OUTPUT
+            echo "No environments were deleted"
+          fi
+
       - name: Set up Terraform
+        if: steps.check-deletions.outputs.deleted == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.8.2
 
       - name: Google Auth
+        if: steps.check-deletions.outputs.deleted == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/566479143581/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
           service_account: 'github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
+        if: steps.check-deletions.outputs.deleted == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Clean State Locks
+        if: steps.check-deletions.outputs.deleted == 'true'
+        run: |
+          # Clean up any stale state locks
+          gsutil rm gs://terraform-statefile-p/*/terraform/state/default.tflock 2>/dev/null || echo "No locks to clean"
+
       - name: Detect and Destroy Deleted Environments
+        if: steps.check-deletions.outputs.deleted == 'true'
         run: |
           # Get environments from previous commit
           PREVIOUS_ENVIRONMENTS=$(git show HEAD~1:environments/non-prod/ 2>/dev/null | grep -E "^d.*" | awk '{print $NF}' | grep -v "^$" || echo "")
@@ -62,7 +85,7 @@ jobs:
           if [ -n "$DELETED_ENVIRONMENTS" ]; then
             echo "Auto-destroying deleted environments: $DELETED_ENVIRONMENTS"
             
-            # Destroy each environment
+            # Destroy each environment sequentially to avoid state lock conflicts
             for ENV in $DELETED_ENVIRONMENTS; do
               echo "🗑️ Destroying $ENV environment..."
               
@@ -75,13 +98,19 @@ jobs:
               git show HEAD~1:$ENV_PATH/terraform.tfvars > /tmp/$ENV/terraform.tfvars || echo "Could not get terraform.tfvars"
               git show HEAD~1:$ENV_PATH/backend.tf > /tmp/$ENV/backend.tf || echo "Could not get backend.tf"
               
-              # Terraform destroy
-              terraform -chdir=/tmp/$ENV init
-              terraform -chdir=/tmp/$ENV plan -destroy -var="sql_root_password=dummy" -var="sql_app_password=dummy"
-              terraform -chdir=/tmp/$ENV destroy -auto-approve -var="sql_root_password=dummy" -var="sql_app_password=dummy"
+              # Terraform destroy with lock handling
+              terraform -chdir=/tmp/$ENV init -lock=false
+              terraform -chdir=/tmp/$ENV plan -destroy -lock=false -var="sql_root_password=dummy" -var="sql_app_password=dummy"
+              terraform -chdir=/tmp/$ENV destroy -auto-approve -lock=false -var="sql_root_password=dummy" -var="sql_app_password=dummy"
               
               echo "✅ $ENV destroyed successfully"
             done
           else
             echo "No environments to destroy"
-          fi 
+          fi
+
+      - name: Skip Destroy (No Files Deleted)
+        if: steps.check-deletions.outputs.deleted == 'false'
+        run: |
+          echo "🔄 Skipping destroy workflow - no environment files were deleted"
+          echo "Apply workflow will handle the deployment" 
