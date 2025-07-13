@@ -47,10 +47,10 @@ jobs:
             ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
             APP_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
             
-            # Terraform commands
-            terraform -chdir=$ENV_PATH init
-            terraform -chdir=$ENV_PATH plan -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
-            terraform -chdir=$ENV_PATH apply -auto-approve -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
+            # Terraform commands with lock handling
+            terraform -chdir=$ENV_PATH init -lock=false
+            terraform -chdir=$ENV_PATH plan -lock=false -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
+            terraform -chdir=$ENV_PATH apply -auto-approve -lock=false -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
             
             # Store passwords
             echo "$ROOT_PASSWORD" | gcloud secrets create cloudsql-root-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
