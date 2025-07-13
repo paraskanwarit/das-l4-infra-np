@@ -41,30 +41,18 @@ jobs:
       - name: Check if apply should run
         id: check
         run: |
-          # Get list of environments that existed before this commit
-          PREVIOUS_ENVIRONMENTS=$(git show HEAD~1:environments/non-prod/ 2>/dev/null | grep -E "^d.*" | awk '{print $NF}' | grep -v "^$" || echo "")
-          
           # Get list of current environments
           CURRENT_ENVIRONMENTS=$(find environments/non-prod -maxdepth 1 -type d -name "*" 2>/dev/null | grep -v "^environments/non-prod$" | xargs -I {} sh -c 'if [ -f "{}/main.tf" ]; then basename "{}"; fi' | sort || echo "")
           
-          echo "Previous environments: $PREVIOUS_ENVIRONMENTS"
           echo "Current environments: $CURRENT_ENVIRONMENTS"
           
-          # Check if any environments were deleted
-          DELETED_ENVIRONMENTS=""
-          for env in $PREVIOUS_ENVIRONMENTS; do
-            if ! echo "$CURRENT_ENVIRONMENTS" | grep -q "$env"; then
-              DELETED_ENVIRONMENTS="$DELETED_ENVIRONMENTS $env"
-            fi
-          done
-          
-          if [ -n "$DELETED_ENVIRONMENTS" ]; then
-            echo "should_apply=false" >> $GITHUB_OUTPUT
-            echo "❌ Environments were deleted: $DELETED_ENVIRONMENTS - skipping apply workflow"
-            echo "The destroy workflow will handle cleanup"
-          else
+          # Always run apply if there are environments to deploy
+          if [ -n "$CURRENT_ENVIRONMENTS" ]; then
             echo "should_apply=true" >> $GITHUB_OUTPUT
-            echo "✅ No environments deleted - proceeding with apply workflow"
+            echo "✅ Environments found: $CURRENT_ENVIRONMENTS - proceeding with apply workflow"
+          else
+            echo "should_apply=false" >> $GITHUB_OUTPUT
+            echo "❌ No environments found - skipping apply workflow"
           fi
 
   # Apply job
