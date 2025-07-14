@@ -8,8 +8,6 @@ crash.*.log
 *.tfplan
 
 # Sensitive variable files
-*.tfvars
-*.tfvars.json
 
 # Local .terraform directories
 .terraform/
@@ -35,3 +33,8 @@ __pycache__/
 # Ignore backup files
 *.bak
 *.tmp
+
+*.tfvars
+*.tfvars.json
+!environments/non-prod/dev/terraform.tfvars
+!environments/non-prod/qa1/terraform.tfvars

@@ -5,19 +5,28 @@ variable "project_id" {
 }
 
 variable "private_network" {
+  description = "The VPC network self link for PSC."
   description = "Private network for CloudSQL"
   type        = string
   default     = "projects/affable-beaker-464822-b4/global/networks/default"
 }
 
 variable "sql_root_password" {
+  description = "Root password for CloudSQL."
   description = "Root password for CloudSQL"
   type        = string
   sensitive   = true
 }
 
 variable "sql_app_password" {
+  description = "App user password for CloudSQL."
   description = "App user password for CloudSQL"
   type        = string
   sensitive   = true
+}
+variable "project_id" {
+  description = "GCP Project ID"
+  type        = string
+}
+
 } 
