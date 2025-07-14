@@ -1,4 +1,4 @@
-# 🛠️ Terraform Infrastructure Setup Guide
+#  Terraform Infrastructure Setup Guide
 
 ## Overview
 Complete setup guide for the automated Terraform infrastructure deployment system.
