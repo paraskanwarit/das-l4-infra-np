@@ -318,4 +318,4 @@ After successful setup:
 3. **Monitor deployments** via GitHub Actions
 4. **Scale the system** as needed
 
-**This setup guide ensures a production-ready infrastructure automation system!** 🚀 
+**This setup guide ensures a production-ready infrastructure automation system!**  
