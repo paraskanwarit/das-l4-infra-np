@@ -1,16 +1,16 @@
-# 🚀 Terraform Infrastructure Automation
+# Terraform Infrastructure Automation
 
 ## Overview
 Automated Terraform deployment system for GCP CloudSQL environments using GitHub Actions CI/CD.
 
-## 🎯 Key Features
-- ✅ **Fully Automated**: Push to deploy - no manual triggers
-- ✅ **Multi-Environment**: Auto-detects and deploys all environments
-- ✅ **Remote State**: All state stored in GCS bucket
-- ✅ **Secure**: Workload Identity Federation, no hardcoded credentials
-- ✅ **Production-Ready**: State locking, error handling, password management
+##  Key Features
+-  **Fully Automated**: Push to deploy - no manual triggers
+-  **Multi-Environment**: Auto-detects and deploys all environments
+-  **Remote State**: All state stored in GCS bucket
+-  **Secure**: Workload Identity Federation, no hardcoded credentials
+-  **Production-Ready**: State locking, error handling, password management
 
-## 📁 Project Structure
+##  Project Structure
 ```
 das-l4-infra-np/
 ├── .github/workflows/
@@ -30,7 +30,7 @@ das-l4-infra-np/
 └── SETUP_GUIDE.md             # Setup instructions
 ```
 
-## 🔄 Workflow Overview
+##  Workflow Overview
 
 ```mermaid
 graph TD
@@ -42,14 +42,14 @@ graph TD
     F --> G[Plan Changes]
     G --> H[Apply Infrastructure]
     H --> I[Store Passwords in Secret Manager]
-    I --> J[✅ Environment Deployed]
+    I --> J[ Environment Deployed]
     
     style A fill:#e1f5fe
     style J fill:#c8e6c9
     style H fill:#fff3e0
 ```
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Add New Environment
 ```bash
@@ -74,29 +74,29 @@ git commit -m "Update environment"
 git push
 ```
 
-## 🛡️ Security Features
+##  Security Features
 - **Workload Identity Federation**: No hardcoded credentials
 - **Remote State**: All state in GCS bucket
 - **Password Management**: Stored in GCP Secret Manager
 - **State Locking**: Prevents concurrent modifications
 
-## 📊 Current Environments
-- ✅ **dev**: Development environment (PostgreSQL 16)
+##  Current Environments
+-  **dev**: Development environment (PostgreSQL 16)
 
-## 🔧 Technical Stack
+##  Technical Stack
 - **Terraform**: 1.8.2
 - **State Storage**: GCS bucket `terraform-statefile-p`
 - **Authentication**: Workload Identity Federation
 - **CI/CD**: GitHub Actions
 - **Database**: PostgreSQL 16 on CloudSQL
 
-## 📚 Documentation
+##  Documentation
 - [Workflow Summary](WORKFLOW_SUMMARY.md) - Detailed workflow documentation
 - [Showcase Guide](SHOWCASE_GUIDE.md) - Demo and presentation guide
 - [Testing Guide](TESTING_GUIDE.md) - Testing procedures
 - [Setup Guide](SETUP_GUIDE.md) - Initial setup instructions
 
-## 🎯 Benefits
+##  Benefits
 - **Simple**: Just Git operations
 - **Automated**: No manual intervention
 - **Reliable**: Consistent deployment process

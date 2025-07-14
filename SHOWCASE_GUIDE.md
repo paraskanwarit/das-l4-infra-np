@@ -1,9 +1,9 @@
-# 🎯 Terraform Infrastructure Showcase Guide
+#  Terraform Infrastructure Showcase Guide
 
 ## Overview
 Complete demonstration guide for showcasing the automated Terraform infrastructure deployment system.
 
-## 🎬 Demo Flow
+##  Demo Flow
 
 ```mermaid
 graph TD
@@ -25,7 +25,7 @@ graph TD
     style J fill:#fff3e0
 ```
 
-## 🚀 Live Demo Script
+##  Live Demo Script
 
 ### 1. **Initial Setup** (2 minutes)
 ```bash
@@ -83,7 +83,7 @@ git push
 - **Workload Identity**: Explain authentication
 - **Remote State**: Show GCS bucket
 
-## 📊 Demo Architecture
+##  Demo Architecture
 
 ```mermaid
 graph TB
@@ -122,30 +122,30 @@ graph TB
     style F fill:#c8e6c9
 ```
 
-## 🎯 Key Points to Highlight
+##  Key Points to Highlight
 
 ### **Automation**
-- ✅ **Zero Manual Steps**: Just Git push
-- ✅ **Auto-Detection**: Finds all environments
-- ✅ **Parallel Processing**: Deploys all environments
+-  **Zero Manual Steps**: Just Git push
+-  **Auto-Detection**: Finds all environments
+-  **Parallel Processing**: Deploys all environments
 
 ### **Security**
-- ✅ **No Hardcoded Credentials**: Workload Identity
-- ✅ **Secure Passwords**: Random generation
-- ✅ **Secret Storage**: GCP Secret Manager
-- ✅ **Remote State**: No local state files
+-  **No Hardcoded Credentials**: Workload Identity
+-  **Secure Passwords**: Random generation
+-  **Secret Storage**: GCP Secret Manager
+-  **Remote State**: No local state files
 
 ### **Reliability**
-- ✅ **State Locking**: Prevents conflicts
-- ✅ **Error Handling**: Graceful failures
-- ✅ **Consistent Deployments**: Same process every time
+-  **State Locking**: Prevents conflicts
+-  **Error Handling**: Graceful failures
+-  **Consistent Deployments**: Same process every time
 
 ### **Scalability**
-- ✅ **Easy Environment Addition**: Copy and modify
-- ✅ **Independent Environments**: Separate state files
-- ✅ **No Configuration Drift**: Infrastructure as Code
+-  **Easy Environment Addition**: Copy and modify
+-  **Independent Environments**: Separate state files
+-  **No Configuration Drift**: Infrastructure as Code
 
-## 📈 Demo Metrics
+##  Demo Metrics
 
 | Metric | Value | Impact |
 |--------|-------|--------|
@@ -154,7 +154,7 @@ graph TB
 | **Environments** | Unlimited | Highly scalable |
 | **Security Score** | A+ | Production ready |
 
-## 🎬 Demo Checklist
+##  Demo Checklist
 
 ### **Before Demo**
 - [ ] Ensure GitHub Actions is working
@@ -176,7 +176,7 @@ graph TB
 - [ ] Answer questions
 - [ ] Share documentation links
 
-## 🎯 Talking Points
+##  Talking Points
 
 ### **"Why This Matters"**
 - **Developer Productivity**: Focus on code, not infrastructure
@@ -196,19 +196,19 @@ graph TB
 - **Cost Optimization**: Efficient resource management
 - **Team Empowerment**: Self-service infrastructure
 
-## 📚 Supporting Materials
+##  Supporting Materials
 
 - **Repository**: `https://github.com/paraskanwarit/das-l4-infra-np`
 - **Documentation**: [WORKFLOW_SUMMARY.md](WORKFLOW_SUMMARY.md)
 - **Setup Guide**: [SETUP_GUIDE.md](SETUP_GUIDE.md)
 - **Testing Guide**: [TESTING_GUIDE.md](TESTING_GUIDE.md)
 
-## 🎯 Demo Success Criteria
+##  Demo Success Criteria
 
-- ✅ **Audience understands** the automation
-- ✅ **Security features** are clear
-- ✅ **Scalability** is demonstrated
-- ✅ **Business value** is communicated
-- ✅ **Technical excellence** is evident
+-  **Audience understands** the automation
+-  **Security features** are clear
+-  **Scalability** is demonstrated
+-  **Business value** is communicated
+-  **Technical excellence** is evident
 
 **This demo showcases a production-ready, enterprise-grade infrastructure automation system!** 🚀 

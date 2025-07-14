@@ -3,21 +3,21 @@
 ## Overview
 Complete setup guide for the automated Terraform infrastructure deployment system.
 
-## 🎯 Prerequisites
+##  Prerequisites
 
 ### **Required Tools**
-- ✅ **Git**: Version control
-- ✅ **Terraform**: 1.8.2 or higher
-- ✅ **Google Cloud SDK**: For GCP authentication
-- ✅ **GitHub Account**: For repository access
-- ✅ **GCP Project**: With billing enabled
+-  **Git**: Version control
+-  **Terraform**: 1.8.2 or higher
+-  **Google Cloud SDK**: For GCP authentication
+-  **GitHub Account**: For repository access
+-  **GCP Project**: With billing enabled
 
 ### **Required Permissions**
-- ✅ **GCP Project Owner**: For resource creation
-- ✅ **GitHub Repository Access**: For code management
-- ✅ **Workload Identity Federation**: For authentication
+-  **GCP Project Owner**: For resource creation
+-  **GitHub Repository Access**: For code management
+-  **Workload Identity Federation**: For authentication
 
-## 🚀 Setup Process
+##  Setup Process
 
 ```mermaid
 graph TD
@@ -27,7 +27,7 @@ graph TD
     D --> E[Create GCS Bucket]
     E --> F[Configure Environments]
     F --> G[Test Deployment]
-    G --> H[✅ Setup Complete]
+    G --> H[ Setup Complete]
     
     style A fill:#e1f5fe
     style H fill:#c8e6c9
@@ -35,7 +35,7 @@ graph TD
     style G fill:#fff3e0
 ```
 
-## 📋 Step-by-Step Setup
+##  Step-by-Step Setup
 
 ### **Step 1: Repository Setup**
 ```bash
@@ -143,7 +143,7 @@ git commit -m "Initial setup: Configure for new project"
 git push origin main
 ```
 
-## 🔧 Configuration Files
+##  Configuration Files
 
 ### **Environment Structure**
 ```
@@ -189,27 +189,27 @@ module "cloudsql" {
 }
 ```
 
-## 🛡️ Security Configuration
+##  Security Configuration
 
 ### **Workload Identity Federation**
-- ✅ **No hardcoded credentials**
-- ✅ **Temporary authentication**
-- ✅ **Principle of least privilege**
-- ✅ **Audit trail enabled**
+-  **No hardcoded credentials**
+-  **Temporary authentication**
+-  **Principle of least privilege**
+-  **Audit trail enabled**
 
 ### **State Management**
-- ✅ **Remote state storage**
-- ✅ **State locking enabled**
-- ✅ **State isolation per environment**
-- ✅ **Backup and recovery**
+-  **Remote state storage**
+-  **State locking enabled**
+-  **State isolation per environment**
+-  **Backup and recovery**
 
 ### **Password Management**
-- ✅ **Random password generation**
-- ✅ **Secure storage in Secret Manager**
-- ✅ **Automatic replication**
-- ✅ **Access control**
+-  **Random password generation**
+-  **Secure storage in Secret Manager**
+-  **Automatic replication**
+-  **Access control**
 
-## 🔍 Verification Steps
+##  Verification Steps
 
 ### **1. GitHub Actions Verification**
 ```bash
@@ -238,7 +238,7 @@ terraform init -lock=false
 terraform plan -lock=false -var="sql_root_password=test123" -var="sql_app_password=test456"
 ```
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### **Common Issues**
 
@@ -273,7 +273,7 @@ terraform init -upgrade
 gcloud projects get-iam-policy YOUR_PROJECT_ID
 ```
 
-## 📊 Setup Checklist
+##  Setup Checklist
 
 ### **Pre-Setup**
 - [ ] GCP project created with billing enabled
@@ -295,21 +295,21 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID
 - [ ] State management working
 - [ ] Documentation updated
 
-## 🎯 Success Criteria
+##  Success Criteria
 
 ### **Functional Requirements**
-- ✅ GitHub Actions workflow executes successfully
-- ✅ CloudSQL instances are created
-- ✅ Passwords are stored in Secret Manager
-- ✅ State is managed in GCS bucket
+-  GitHub Actions workflow executes successfully
+-  CloudSQL instances are created
+-  Passwords are stored in Secret Manager
+-  State is managed in GCS bucket
 
 ### **Non-Functional Requirements**
-- ✅ Setup time < 30 minutes
-- ✅ Zero manual intervention after setup
-- ✅ Security compliance achieved
-- ✅ Documentation complete
+-  Setup time < 30 minutes
+-  Zero manual intervention after setup
+-  Security compliance achieved
+-  Documentation complete
 
-## 📚 Next Steps
+##  Next Steps
 
 After successful setup:
 
