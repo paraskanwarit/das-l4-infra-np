@@ -211,4 +211,4 @@ graph TB
 -  **Business value** is communicated
 -  **Technical excellence** is evident
 
-**This demo showcases a production-ready, enterprise-grade infrastructure automation system!** 🚀 
+**This demo showcases a production-ready, enterprise-grade infrastructure automation system!** 
