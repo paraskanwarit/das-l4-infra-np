@@ -58,3 +58,62 @@ jobs:
             
             echo " $ENV deployed successfully"
           done
+
+  destroy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: Checkout previous commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.before }}
+
+      - name: List environments in previous commit
+        id: prev_envs
+        run: |
+          PREV_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort)
+          echo "prev_envs=$PREV_ENVS" >> $GITHUB_OUTPUT
+
+      - name: Checkout current commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: List environments in current commit
+        id: curr_envs
+        run: |
+          CURR_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort)
+          echo "curr_envs=$CURR_ENVS" >> $GITHUB_OUTPUT
+
+      - name: Find deleted environments
+        id: find_deleted
+        run: |
+          PREV_ENVS="${{ steps.prev_envs.outputs.prev_envs }}"
+          CURR_ENVS="${{ steps.curr_envs.outputs.curr_envs }}"
+          DELETED_ENVS=$(comm -23 <(echo "$PREV_ENVS") <(echo "$CURR_ENVS"))
+          echo "Deleted environments: $DELETED_ENVS"
+          echo "deleted_envs=$DELETED_ENVS" >> $GITHUB_OUTPUT
+
+      - name: Destroy deleted environments
+        if: steps.find_deleted.outputs.deleted_envs != ''
+        run: |
+          for ENV in ${{ steps.find_deleted.outputs.deleted_envs }}; do
+            echo "Destroying $ENV environment..."
+            # Checkout previous commit to get the deleted environment's code
+            git checkout ${{ github.event.before }}
+            ENV_PATH="environments/non-prod/$ENV"
+            if [ -d "$ENV_PATH" ]; then
+              terraform -chdir=$ENV_PATH init -lock=false
+              terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false || echo "Destroy failed for $ENV"
+            else
+              echo "$ENV_PATH does not exist in previous commit, skipping."
+            fi
+            # Return to current commit for next steps
+            git checkout ${{ github.sha }}
+          done
+        shell: bash
+      - name: No environments to destroy
+        if: steps.find_deleted.outputs.deleted_envs == ''
+        run: echo "No environments to destroy."
