@@ -71,12 +71,10 @@ jobs:
           ref: ${{ github.event.before }}
 
       - name: List environments in previous commit
-        id: prev_envs
         run: |
-          PREV_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort)
-          echo "prev_envs<<EOF" >> $GITHUB_OUTPUT
-          echo "$PREV_ENVS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort > prev_envs.txt
+          echo "Previous environments:"
+          cat prev_envs.txt
 
       - name: Checkout current commit
         uses: actions/checkout@v4
@@ -84,42 +82,43 @@ jobs:
           ref: ${{ github.sha }}
 
       - name: List environments in current commit
-        id: curr_envs
         run: |
-          CURR_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort)
-          echo "curr_envs<<EOF" >> $GITHUB_OUTPUT
-          echo "$CURR_ENVS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort > curr_envs.txt
+          echo "Current environments:"
+          cat curr_envs.txt
 
       - name: Find deleted environments
         id: find_deleted
         run: |
-          PREV_ENVS="${{ steps.prev_envs.outputs.prev_envs }}"
-          CURR_ENVS="${{ steps.curr_envs.outputs.curr_envs }}"
-          DELETED_ENVS=$(comm -23 <(echo "$PREV_ENVS") <(echo "$CURR_ENVS"))
+          DELETED_ENVS=$(comm -23 prev_envs.txt curr_envs.txt)
           echo "Deleted environments: $DELETED_ENVS"
-          echo "deleted_envs<<EOF" >> $GITHUB_OUTPUT
-          echo "$DELETED_ENVS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          if [ -n "$DELETED_ENVS" ]; then
+            echo "deleted_envs=true" >> $GITHUB_OUTPUT
+            echo "$DELETED_ENVS" > deleted_envs.txt
+          else
+            echo "deleted_envs=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Destroy deleted environments
-        if: steps.find_deleted.outputs.deleted_envs != ''
+        if: steps.find_deleted.outputs.deleted_envs == 'true'
         run: |
-          for ENV in ${{ steps.find_deleted.outputs.deleted_envs }}; do
-            echo "Destroying $ENV environment..."
-            # Checkout previous commit to get the deleted environment's code
-            git checkout ${{ github.event.before }}
-            ENV_PATH="environments/non-prod/$ENV"
-            if [ -d "$ENV_PATH" ]; then
-              terraform -chdir=$ENV_PATH init -lock=false
-              terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false || echo "Destroy failed for $ENV"
-            else
-              echo "$ENV_PATH does not exist in previous commit, skipping."
+          while IFS= read -r ENV; do
+            if [ -n "$ENV" ]; then
+              echo "Destroying $ENV environment..."
+              # Checkout previous commit to get the deleted environment's code
+              git checkout ${{ github.event.before }}
+              ENV_PATH="environments/non-prod/$ENV"
+              if [ -d "$ENV_PATH" ]; then
+                terraform -chdir=$ENV_PATH init -lock=false
+                terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false || echo "Destroy failed for $ENV"
+              else
+                echo "$ENV_PATH does not exist in previous commit, skipping."
+              fi
+              # Return to current commit for next steps
+              git checkout ${{ github.sha }}
             fi
-            # Return to current commit for next steps
-            git checkout ${{ github.sha }}
-          done
-        shell: bash
+          done < deleted_envs.txt
+
       - name: No environments to destroy
-        if: steps.find_deleted.outputs.deleted_envs == ''
+        if: steps.find_deleted.outputs.deleted_envs == 'false'
         run: echo "No environments to destroy."
