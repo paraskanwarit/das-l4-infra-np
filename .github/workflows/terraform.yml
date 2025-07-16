@@ -72,9 +72,14 @@ jobs:
 
       - name: List environments in previous commit
         run: |
-          find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort > prev_envs.txt
-          echo "Previous environments:"
-          cat prev_envs.txt
+          if [ -d "environments/non-prod" ]; then
+            find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort > prev_envs.txt
+            echo "Previous environments:"
+            cat prev_envs.txt
+          else
+            echo "environments/non-prod directory does not exist in previous commit"
+            touch prev_envs.txt
+          fi
 
       - name: Checkout current commit
         uses: actions/checkout@v4
@@ -83,19 +88,29 @@ jobs:
 
       - name: List environments in current commit
         run: |
-          find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort > curr_envs.txt
-          echo "Current environments:"
-          cat curr_envs.txt
+          if [ -d "environments/non-prod" ]; then
+            find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort > curr_envs.txt
+            echo "Current environments:"
+            cat curr_envs.txt
+          else
+            echo "environments/non-prod directory does not exist in current commit"
+            touch curr_envs.txt
+          fi
 
       - name: Find deleted environments
         id: find_deleted
         run: |
-          DELETED_ENVS=$(comm -23 prev_envs.txt curr_envs.txt)
-          echo "Deleted environments: $DELETED_ENVS"
-          if [ -n "$DELETED_ENVS" ]; then
-            echo "deleted_envs=true" >> $GITHUB_OUTPUT
-            echo "$DELETED_ENVS" > deleted_envs.txt
+          if [ -f "prev_envs.txt" ] && [ -f "curr_envs.txt" ]; then
+            DELETED_ENVS=$(comm -23 prev_envs.txt curr_envs.txt)
+            echo "Deleted environments: $DELETED_ENVS"
+            if [ -n "$DELETED_ENVS" ]; then
+              echo "deleted_envs=true" >> $GITHUB_OUTPUT
+              echo "$DELETED_ENVS" > deleted_envs.txt
+            else
+              echo "deleted_envs=false" >> $GITHUB_OUTPUT
+            fi
           else
+            echo "Environment files not found, no environments to destroy"
             echo "deleted_envs=false" >> $GITHUB_OUTPUT
           fi
 
