@@ -73,22 +73,29 @@ jobs:
       - name: List environments in previous commit
         run: |
           echo "Checking previous commit: ${{ github.event.before }}"
+          echo "Creating prev_envs.txt first..."
+          echo "" > prev_envs.txt
+          echo "prev_envs.txt created initially"
+          
           ls -la
-          echo "Creating prev_envs.txt..."
+          echo "environments/non-prod directory exists: $([ -d "environments/non-prod" ] && echo "yes" || echo "no")"
+          
           if [ -d "environments/non-prod" ]; then
             echo "environments/non-prod directory found, listing environments..."
-            find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort > prev_envs.txt || echo "find command failed, creating empty file"
+            ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort)
+            echo "Found environments: $ENVS"
+            echo "$ENVS" > prev_envs.txt
             echo "Previous environments:"
-            cat prev_envs.txt || echo "prev_envs.txt is empty or failed to read"
-            echo "prev_envs.txt created successfully"
+            cat prev_envs.txt
+            echo "prev_envs.txt updated successfully"
           else
             echo "environments/non-prod directory does not exist in previous commit"
-            echo "" > prev_envs.txt
-            echo "Created empty prev_envs.txt"
+            echo "prev_envs.txt remains empty"
           fi
+          
           echo "Final check - prev_envs.txt exists: $([ -f "prev_envs.txt" ] && echo "yes" || echo "no")"
           echo "prev_envs.txt contents:"
-          cat prev_envs.txt || echo "Cannot read prev_envs.txt"
+          cat prev_envs.txt
 
       - name: Checkout current commit
         uses: actions/checkout@v4
