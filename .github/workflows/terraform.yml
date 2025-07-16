@@ -74,7 +74,7 @@ jobs:
         id: prev_envs
         run: |
           PREV_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort)
-          echo "prev_envs=$PREV_ENVS" >> $GITHUB_OUTPUT
+          echo "prev_envs=$(echo $PREV_ENVS | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
       - name: Checkout current commit
         uses: actions/checkout@v4
@@ -85,16 +85,16 @@ jobs:
         id: curr_envs
         run: |
           CURR_ENVS=$(find environments/non-prod -maxdepth 1 -type d -name "*" | grep -v "^environments/non-prod$" | xargs -I {} basename "{}" | sort)
-          echo "curr_envs=$CURR_ENVS" >> $GITHUB_OUTPUT
+          echo "curr_envs=$(echo $CURR_ENVS | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
       - name: Find deleted environments
         id: find_deleted
         run: |
           PREV_ENVS="${{ steps.prev_envs.outputs.prev_envs }}"
           CURR_ENVS="${{ steps.curr_envs.outputs.curr_envs }}"
-          DELETED_ENVS=$(comm -23 <(echo "$PREV_ENVS") <(echo "$CURR_ENVS"))
+          DELETED_ENVS=$(comm -23 <(echo "$PREV_ENVS" | tr ' ' '\n' | sort) <(echo "$CURR_ENVS" | tr ' ' '\n' | sort))
           echo "Deleted environments: $DELETED_ENVS"
-          echo "deleted_envs=$DELETED_ENVS" >> $GITHUB_OUTPUT
+          echo "deleted_envs=$(echo $DELETED_ENVS | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
       - name: Destroy deleted environments
         if: steps.find_deleted.outputs.deleted_envs != ''
