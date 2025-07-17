@@ -1,2 +1,2 @@
-project_id         = "affable-beaker-464822-b4"
-private_network    = "projects/affable-beaker-464822-b4/global/networks/default"
+project_id         = "extreme-gecko-466211-t1"
+private_network    = "projects/extreme-gecko-466211-t1/global/networks/default"

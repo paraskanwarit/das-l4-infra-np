@@ -1,13 +1,13 @@
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
-  default     = "affable-beaker-464822-b4"
+  default     = "extreme-gecko-466211-t1"
 }
 
 variable "private_network" {
   description = "Private network for CloudSQL"
   type        = string
-  default     = "projects/affable-beaker-464822-b4/global/networks/default"
+  default     = "projects/extreme-gecko-466211-t1/global/networks/default"
 }
 
 variable "sql_root_password" {
