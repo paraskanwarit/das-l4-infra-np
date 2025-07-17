@@ -143,7 +143,7 @@ jobs:
             ENV_PATH="environments/non-prod/$ENV"
             if [ -d "$ENV_PATH" ]; then
               terraform -chdir=$ENV_PATH init -lock=false
-              terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false || echo "Destroy failed for $ENV"
+              terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false -var="sql_root_password=dummy" -var="sql_app_password=dummy" || echo "Destroy failed for $ENV"
             else
               echo "$ENV_PATH does not exist in previous commit, skipping."
             fi
