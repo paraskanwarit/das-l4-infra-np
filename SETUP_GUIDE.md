@@ -1,7 +1,7 @@
 #  Terraform Infrastructure Setup Guide
 
 ## Overview
-Complete setup guide for the automated Terraform infrastructure deployment system.
+Complete setup guide for the automated Terraform infrastructure deployment system for project **affable-beaker-464822-b4**.
 
 ##  Prerequisites
 
@@ -10,7 +10,7 @@ Complete setup guide for the automated Terraform infrastructure deployment syste
 -  **Terraform**: 1.8.2 or higher
 -  **Google Cloud SDK**: For GCP authentication
 -  **GitHub Account**: For repository access
--  **GCP Project**: With billing enabled
+-  **GCP Project**: With billing enabled (**affable-beaker-464822-b4**)
 
 ### **Required Permissions**
 -  **GCP Project Owner**: For resource creation
@@ -51,7 +51,7 @@ tree environments/
 ### **Step 2: GCP Project Setup**
 ```bash
 # Set your GCP project
-gcloud config set project YOUR_PROJECT_ID
+gcloud config set project affable-beaker-464822-b4
 
 # Enable required APIs
 gcloud services enable sqladmin.googleapis.com
@@ -79,18 +79,19 @@ gcloud iam service-accounts create "github-actions-sa" \
   --display-name="GitHub Actions Service Account"
 
 # Grant necessary permissions
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding affable-beaker-464822-b4 \
+  --member="serviceAccount:github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com" \
   --role="roles/editor"
 
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-  --member="serviceAccount:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding affable-beaker-464822-b4 \
+  --member="serviceAccount:github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com" \
   --role="roles/secretmanager.admin"
 
 # Allow GitHub Actions to impersonate the service account
-gcloud iam service-accounts add-iam-policy-binding "github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+gcloud iam service-accounts add-iam-policy-binding "github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com" \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/paraskanwarit/das-l4-infra-np"
+# Replace YOUR_PROJECT_NUMBER with the numeric project number for affable-beaker-464822-b4 (get it with: gcloud projects describe affable-beaker-464822-b4 --format='value(projectNumber)')
 ```
 
 ### **Step 4: GCS Bucket Setup**
@@ -99,7 +100,7 @@ gcloud iam service-accounts add-iam-policy-binding "github-actions-sa@YOUR_PROJE
 gsutil mb gs://terraform-statefile-p
 
 # Set bucket permissions
-gsutil iam ch serviceAccount:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com:objectAdmin gs://terraform-statefile-p
+gsutil iam ch serviceAccount:github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com:objectAdmin gs://terraform-statefile-p
 ```
 
 ### **Step 5: GitHub Secrets Setup**
@@ -112,18 +113,18 @@ gcloud iam workload-identity-pools providers describe "github-provider" \
 
 # Add to GitHub repository secrets:
 # WORKLOAD_IDENTITY_PROVIDER: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
-# SERVICE_ACCOUNT: github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+# SERVICE_ACCOUNT: github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com
 ```
 
 ### **Step 6: Environment Configuration**
 ```bash
 # Update project ID in all environment files
-find environments -name "*.tf" -exec sed -i 's/affable-beaker-464822-b4/YOUR_PROJECT_ID/g' {} \;
-find environments -name "*.tfvars" -exec sed -i 's/affable-beaker-464822-b4/YOUR_PROJECT_ID/g' {} \;
+find environments -name "*.tf" -exec sed -i '' 's/affable-beaker-464822-b4/affable-beaker-464822-b4/g' {} \;
+find environments -name "*.tfvars" -exec sed -i '' 's/affable-beaker-464822-b4/affable-beaker-464822-b4/g' {} \;
 
 # Update network configuration
-find environments -name "*.tf" -exec sed -i 's/projects\/affable-beaker-464822-b4\/global\/networks\/default/projects\/YOUR_PROJECT_ID\/global\/networks\/default/g' {} \;
-find environments -name "*.tfvars" -exec sed -i 's/projects\/affable-beaker-464822-b4\/global\/networks\/default/projects\/YOUR_PROJECT_ID\/global\/networks\/default/g' {} \;
+find environments -name "*.tf" -exec sed -i '' 's/projects\/affable-beaker-464822-b4\/global\/networks\/default/projects\/affable-beaker-464822-b4\/global\/networks\/default/g' {} \;
+find environments -name "*.tfvars" -exec sed -i '' 's/projects\/affable-beaker-464822-b4\/global\/networks\/default/projects\/affable-beaker-464822-b4\/global\/networks\/default/g' {} \;
 ```
 
 ### **Step 7: Test Local Setup**
@@ -139,7 +140,7 @@ terraform plan -lock=false -var="sql_root_password=test123" -var="sql_app_passwo
 ```bash
 # Commit and push changes
 git add .
-git commit -m "Initial setup: Configure for new project"
+git commit -m "Initial setup: Configure for new project affable-beaker-464822-b4"
 git push origin main
 ```
 
@@ -249,10 +250,10 @@ gcloud auth list
 gcloud config get-value project
 
 # Verify service account permissions
-gcloud projects get-iam-policy YOUR_PROJECT_ID \
+gcloud projects get-iam-policy affable-beaker-464822-b4 \
   --flatten="bindings[].members" \
   --format="table(bindings.role)" \
-  --filter="bindings.members:github-actions-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+  --filter="bindings.members:github-actions-sa@affable-beaker-464822-b4.iam.gserviceaccount.com"
 ```
 
 #### **2. State Lock Errors**
@@ -270,13 +271,13 @@ terraform init -upgrade
 #### **4. Permission Errors**
 ```bash
 # Check IAM permissions
-gcloud projects get-iam-policy YOUR_PROJECT_ID
+gcloud projects get-iam-policy affable-beaker-464822-b4
 ```
 
 ##  Setup Checklist
 
 ### **Pre-Setup**
-- [ ] GCP project created with billing enabled
+- [ ] GCP project affable-beaker-464822-b4 created with billing enabled
 - [ ] GitHub repository cloned
 - [ ] Required APIs enabled
 - [ ] Service account created
