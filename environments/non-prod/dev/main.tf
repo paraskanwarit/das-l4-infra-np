@@ -24,3 +24,4 @@ module "cloudsql" {
     owner       = "team"
   }
 } 
+# delete a environments
