@@ -109,7 +109,7 @@ jobs:
       - name: Find deleted environments
         id: find_deleted
         run: |
-          DELETED_ENVS=$(comm -23 prev_envs.txt curr_envs.txt)
+          DELETED_ENVS=$(git diff --name-status ${{ github.event.before }} ${{ github.sha }} | grep "^D" | grep "^D\s\+environments/non-prod/" | awk '{print $2}' | xargs -n1 basename | sort | uniq)
           echo "Deleted environments: $DELETED_ENVS"
           if [ -n "$DELETED_ENVS" ]; then
             echo "deleted_envs=true" >> $GITHUB_OUTPUT
