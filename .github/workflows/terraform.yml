@@ -64,76 +64,76 @@ jobs:
             echo " $ENV deployed successfully"
           done
 
-destroy:
-  runs-on: ubuntu-latest
-  environment:
-    name: non-prod-destroy
-  permissions:
-    contents: 'read'
-    id-token: 'write'
-  steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        persist-credentials: false
+  destroy:
+    runs-on: ubuntu-latest
+    environment:
+      name: non-prod-destroy
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-    - name: List environments in previous commit
-      run: |
-        git checkout ${{ github.event.before }}
-        if [ -d "environments/non-prod" ]; then
-          find environments/non-prod -maxdepth 1 -type d -name "*" \
-            | grep -v "^environments/non-prod$" \
-            | xargs -I {} basename "{}" \
-            | sort > /tmp/prev_envs.txt
-        else
-          echo "" > /tmp/prev_envs.txt
-        fi
-
-    - name: Checkout current commit
-      run: git checkout ${{ github.sha }}
-
-    - name: List environments in current commit
-      run: |
-        if [ -d "environments/non-prod" ]; then
-          find environments/non-prod -maxdepth 1 -type d -name "*" \
-            | grep -v "^environments/non-prod$" \
-            | xargs -I {} basename "{}" \
-            | sort > curr_envs.txt
-        else
-          echo "" > curr_envs.txt
-        fi
-        # Restore prev_envs.txt from /tmp
-        cp /tmp/prev_envs.txt prev_envs.txt
-
-    - name: Find deleted environments
-      id: find_deleted
-      run: |
-        DELETED_ENVS=$(comm -23 prev_envs.txt curr_envs.txt)
-        echo "Deleted environments: $DELETED_ENVS"
-        if [ -n "$DELETED_ENVS" ]; then
-          echo "deleted_envs=true" >> $GITHUB_OUTPUT
-          echo "$DELETED_ENVS" > deleted_envs.txt
-        else
-          echo "deleted_envs=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Destroy deleted environments
-      if: steps.find_deleted.outputs.deleted_envs == 'true'
-      run: |
-        git checkout ${{ github.event.before }}
-        while IFS= read -r ENV; do
-          echo "Destroying $ENV environment..."
-          ENV_PATH="environments/non-prod/$ENV"
-          if [ -d "$ENV_PATH" ]; then
-            terraform -chdir=$ENV_PATH init -lock=false
-            terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false || echo "Destroy failed for $ENV"
+      - name: List environments in previous commit
+        run: |
+          git checkout ${{ github.event.before }}
+          if [ -d "environments/non-prod" ]; then
+             find environments/non-prod -maxdepth 1 -type d -name "*" \
+               | grep -v "^environments/non-prod$" \
+               | xargs -I {} basename "{}" \
+               | sort > /tmp/prev_envs.txt
           else
-            echo "$ENV_PATH does not exist in previous commit, skipping."
+            echo "" > /tmp/prev_envs.txt
           fi
-        done < deleted_envs.txt
-        git checkout ${{ github.sha }}
 
-    - name: No environments to destroy
-      if: steps.find_deleted.outputs.deleted_envs == 'false'
-      run: echo "No environments to destroy."
- 
+      - name: Checkout current commit
+        run: git checkout ${{ github.sha }}
+
+      - name: List environments in current commit
+        run: |
+          if [ -d "environments/non-prod" ]; then
+             find environments/non-prod -maxdepth 1 -type d -name "*" \
+               | grep -v "^environments/non-prod$" \
+               | xargs -I {} basename "{}" \
+               | sort > curr_envs.txt
+          else
+            echo "" > curr_envs.txt
+          fi
+
+      - name: Restore prev_envs.txt from tmp
+        run: cp /tmp/prev_envs.txt prev_envs.txt
+
+      - name: Find deleted environments
+        id: find_deleted
+        run: |
+          DELETED_ENVS=$(comm -23 prev_envs.txt curr_envs.txt)
+          echo "Deleted environments: $DELETED_ENVS"
+          if [ -n "$DELETED_ENVS" ]; then
+            echo "deleted_envs=true" >> $GITHUB_OUTPUT
+            echo "$DELETED_ENVS" > deleted_envs.txt
+          else
+            echo "deleted_envs=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Destroy deleted environments
+        if: steps.find_deleted.outputs.deleted_envs == 'true'
+        run: |
+          git checkout ${{ github.event.before }}
+          while IFS= read -r ENV; do
+            echo "Destroying $ENV environment..."
+            ENV_PATH="environments/non-prod/$ENV"
+            if [ -d "$ENV_PATH" ]; then
+              terraform -chdir=$ENV_PATH init -lock=false
+              terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false || echo "Destroy failed for $ENV"
+            else
+              echo "$ENV_PATH does not exist in previous commit, skipping."
+            fi
+          done < deleted_envs.txt
+          git checkout ${{ github.sha }}
+
+      - name: No environments to destroy
+        if: steps.find_deleted.outputs.deleted_envs == 'false'
+        run: echo "No environments to destroy."
