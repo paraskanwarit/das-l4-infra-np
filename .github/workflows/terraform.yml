@@ -9,6 +9,8 @@ on:
 jobs:
   apply:
     runs-on: ubuntu-latest
+    environment:
+      name: non-prod-apply
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -61,6 +63,8 @@ jobs:
 
   destroy:
     runs-on: ubuntu-latest
+    environment:
+      name: non-prod-destroy
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -69,6 +73,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.before }}
+          fetch-depth: 0
 
       - name: List environments in previous commit
         run: |
@@ -101,6 +106,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: List environments in current commit
         run: |

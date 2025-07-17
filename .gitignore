@@ -38,3 +38,4 @@ __pycache__/
 *.tfvars.json
 !environments/non-prod/dev/terraform.tfvars
 !environments/non-prod/qa/terraform.tfvars
+!environments/non-prod/qa1/terraform.tfvars
