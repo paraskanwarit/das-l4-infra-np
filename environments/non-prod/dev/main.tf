@@ -4,7 +4,7 @@ provider "google" {
 }
 
 module "cloudsql" {
-  source           = "git::https://github.com/paraskanwarit/terraform-modules.git//cloudsql?ref=v0.02"
+  source           = "git::https://github.com/paraskanwarit/terraform-modules.git//cloudsql?ref=v1.0.0-beta"
   instance_name    = "dev-sql-instance"
   database_version = "POSTGRES_16"
   region           = "australia-southeast1"
