@@ -8,7 +8,7 @@ module "cloudsql" {
   instance_name    = "qa-sql-instance"
   database_version = "POSTGRES_16"
   region           = "australia-southeast1"
-  tier             = "qa-perf-optimized-N-2"
+  tier             = "db-perf-optimized-N-2"
   availability_type = "REGIONAL"
   disk_size        = 50
   disk_type        = "PD_SSD"
