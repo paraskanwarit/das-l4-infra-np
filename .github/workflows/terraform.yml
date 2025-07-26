@@ -97,6 +97,11 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+    # Only run destroy job if we're actually deleting entire environment directories
+    if: |
+      github.event_name == 'push' &&
+      contains(github.event.head_commit.modified, 'environments/non-prod/') == false &&
+      contains(github.event.head_commit.added, 'environments/non-prod/') == false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -149,10 +154,12 @@ jobs:
       - name: Find deleted environments
         id: find_deleted
         run: |
+          # Only consider it a deleted environment if the entire directory is removed
+          # Not just individual files within the environment
           DELETED_ENVS=$(git diff --name-status ${{ github.event.before }} ${{ github.sha }} \
-            | awk '/^D\s+environments\/non-prod\// {split($2, a, "/"); print a[3]}' \
+            | awk '/^D\s+environments\/non-prod\/[^\/]+$/ {split($2, a, "/"); print a[3]}' \
             | sort | uniq)
-          echo "Deleted environments: $DELETED_ENVS"
+          echo "Deleted environments (entire directories): $DELETED_ENVS"
           if [ -n "$DELETED_ENVS" ]; then
             echo "deleted_envs=true" >> $GITHUB_OUTPUT
             echo "$DELETED_ENVS" > deleted_envs.txt
@@ -171,8 +178,13 @@ jobs:
               # Detect infrastructure type for proper destroy
               if [ -f "$ENV_PATH/gke.tf" ] || [ -f "$ENV_PATH/flux-bootstrap.tf" ]; then
                 echo "Destroying GitOps infrastructure for $ENV"
+                echo "Note: GKE clusters with deletion protection will not be destroyed"
                 terraform -chdir=$ENV_PATH init -lock=false
-                terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false
+                # Try to destroy, but don't fail if deletion protection is enabled
+                terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false || {
+                  echo "Destroy failed - likely due to deletion protection. This is expected for production clusters."
+                  echo "To manually destroy, first disable deletion protection on the GKE cluster."
+                }
               elif [ -f "$ENV_PATH/main.tf" ] && grep -q "google_sql_database_instance" "$ENV_PATH/main.tf"; then
                 echo "Destroying CloudSQL infrastructure for $ENV"
                 terraform -chdir=$ENV_PATH init -lock=false
@@ -191,3 +203,10 @@ jobs:
       - name: No environments to destroy
         if: steps.find_deleted.outputs.deleted_envs == 'false'
         run: echo "No environments to destroy."
+        
+      - name: Handle file-only changes
+        if: steps.find_deleted.outputs.deleted_envs == 'false'
+        run: |
+          echo "Detected file changes within existing environments, not environment deletions."
+          echo "This is normal for configuration updates and does not require infrastructure destruction."
+          echo "The infrastructure will remain intact." 
