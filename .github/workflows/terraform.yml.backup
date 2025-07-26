@@ -46,48 +46,22 @@ jobs:
             echo "Deploying $ENV environment..."
             
             ENV_PATH="environments/non-prod/$ENV"
+            INSTANCE_NAME="${ENV}-sql-instance"
             
-            # Detect infrastructure type by checking for specific files
-            if [ -f "$ENV_PATH/gke.tf" ] || [ -f "$ENV_PATH/flux-bootstrap.tf" ]; then
-              echo "Detected GitOps infrastructure (GKE + FluxCD) for $ENV"
-              
-              # GitOps infrastructure deployment (no SQL passwords needed)
-              terraform -chdir=$ENV_PATH init -lock=false
-              terraform -chdir=$ENV_PATH plan -lock=false
-              terraform -chdir=$ENV_PATH apply -auto-approve -lock=false
-              
-              echo "GitOps infrastructure for $ENV deployed successfully"
-              
-            elif [ -f "$ENV_PATH/main.tf" ] && grep -q "google_sql_database_instance" "$ENV_PATH/main.tf"; then
-              echo "Detected CloudSQL infrastructure for $ENV"
-              
-              INSTANCE_NAME="${ENV}-sql-instance"
-              
-              # Generate passwords for CloudSQL
-              ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
-              APP_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
-              
-              # CloudSQL deployment with password variables
-              terraform -chdir=$ENV_PATH init -lock=false
-              terraform -chdir=$ENV_PATH plan -lock=false -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
-              terraform -chdir=$ENV_PATH apply -auto-approve -lock=false -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
-              
-              # Store passwords for CloudSQL
-              echo "$ROOT_PASSWORD" | gcloud secrets create cloudsql-root-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
-              echo "$APP_PASSWORD" | gcloud secrets create cloudsql-app-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
-              
-              echo "CloudSQL infrastructure for $ENV deployed successfully"
-              
-            else
-              echo "Detected generic infrastructure for $ENV"
-              
-              # Generic infrastructure deployment (no specific variables)
-              terraform -chdir=$ENV_PATH init -lock=false
-              terraform -chdir=$ENV_PATH plan -lock=false
-              terraform -chdir=$ENV_PATH apply -auto-approve -lock=false
-              
-              echo "Generic infrastructure for $ENV deployed successfully"
-            fi
+            # Generate passwords
+            ROOT_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
+            APP_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-32)
+            
+            # Terraform commands with lock handling
+            terraform -chdir=$ENV_PATH init -lock=false
+            terraform -chdir=$ENV_PATH plan -lock=false -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
+            terraform -chdir=$ENV_PATH apply -auto-approve -lock=false -var="sql_root_password=$ROOT_PASSWORD" -var="sql_app_password=$APP_PASSWORD"
+            
+            # Store passwords
+            echo "$ROOT_PASSWORD" | gcloud secrets create cloudsql-root-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
+            echo "$APP_PASSWORD" | gcloud secrets create cloudsql-app-password-$ENV --data-file=- --replication-policy="automatic" || echo "Secret already exists"
+            
+            echo " $ENV deployed successfully"
           done
 
   destroy:
@@ -168,20 +142,8 @@ jobs:
             echo "Destroying $ENV environment..."
             ENV_PATH="environments/non-prod/$ENV"
             if [ -d "$ENV_PATH" ]; then
-              # Detect infrastructure type for proper destroy
-              if [ -f "$ENV_PATH/gke.tf" ] || [ -f "$ENV_PATH/flux-bootstrap.tf" ]; then
-                echo "Destroying GitOps infrastructure for $ENV"
-                terraform -chdir=$ENV_PATH init -lock=false
-                terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false
-              elif [ -f "$ENV_PATH/main.tf" ] && grep -q "google_sql_database_instance" "$ENV_PATH/main.tf"; then
-                echo "Destroying CloudSQL infrastructure for $ENV"
-                terraform -chdir=$ENV_PATH init -lock=false
-                terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false -var="sql_root_password=dummy" -var="sql_app_password=dummy"
-              else
-                echo "Destroying generic infrastructure for $ENV"
-                terraform -chdir=$ENV_PATH init -lock=false
-                terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false
-              fi
+              terraform -chdir=$ENV_PATH init -lock=false
+              terraform -chdir=$ENV_PATH destroy -auto-approve -lock=false -var="sql_root_password=dummy" -var="sql_app_password=dummy" || echo "Destroy failed for $ENV"
             else
               echo "$ENV_PATH does not exist in previous commit, skipping."
             fi
